@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { FolderPlus, Edit, Trash2 } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
@@ -13,9 +12,10 @@ interface FolderActionsProps {
   currentPath: string[];
   onPathChange: (path: string[]) => void;
   onRefresh: () => void;
+  onAddFolder: (folderName: string) => void;
 }
 
-export const FolderActions = ({ currentPath, onPathChange, onRefresh }: FolderActionsProps) => {
+export const FolderActions = ({ currentPath, onPathChange, onRefresh, onAddFolder }: FolderActionsProps) => {
   const { hasPermission } = useUser();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
@@ -44,7 +44,9 @@ export const FolderActions = ({ currentPath, onPathChange, onRefresh }: FolderAc
       return;
     }
 
-    // In a real app, this would call the Google Drive API
+    // Call the callback to add the folder
+    onAddFolder(newFolderName.trim());
+
     toast({
       title: "Folder Created",
       description: `"${newFolderName}" has been created successfully.`,
@@ -123,6 +125,9 @@ export const FolderActions = ({ currentPath, onPathChange, onRefresh }: FolderAc
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Folder</DialogTitle>
+              <DialogDescription>
+                Enter a name for the new folder.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -151,6 +156,9 @@ export const FolderActions = ({ currentPath, onPathChange, onRefresh }: FolderAc
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rename Folder</DialogTitle>
+            <DialogDescription>
+              Enter a new name for the folder.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -180,7 +188,8 @@ export const FolderActions = ({ currentPath, onPathChange, onRefresh }: FolderAc
 export const FolderContextMenu = ({ 
   folder, 
   onRename, 
-  onDelete 
+  onDelete,
+  children 
 }: { 
   folder: FileItem; 
   onRename: (name: string) => void; 
@@ -192,7 +201,7 @@ export const FolderContextMenu = ({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        {/* This will wrap the folder item */}
+        {children}
       </ContextMenuTrigger>
       <ContextMenuContent>
         {hasPermission('upload') && (
