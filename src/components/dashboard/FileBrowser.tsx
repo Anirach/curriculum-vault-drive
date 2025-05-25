@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +6,7 @@ import { Upload, Folder, FileText, Search, ArrowLeft, Trash2, Download, Edit } f
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useUser } from '@/contexts/UserContext';
 import { FileItem } from './Dashboard';
-import { FolderActions } from './FolderActions';
+import { FolderActions, FolderActionsRef } from './FolderActions';
 import { toast } from '@/hooks/use-toast';
 
 interface FileBrowserProps {
@@ -21,6 +20,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
   const [searchQuery, setSearchQuery] = useState('');
   const [files, setFiles] = useState<FileItem[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const folderActionsRef = useRef<FolderActionsRef>(null);
 
   // Mock data structure - in real app, this would come from Google Drive API
   const [mockFileStructure, setMockFileStructure] = useState<Record<string, FileItem[]>>({
@@ -170,8 +170,10 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
   };
 
   const handleRenameFolder = (folderName: string) => {
-    // This will be handled by the FolderActions component through the rename dialog
-    console.log('Rename folder requested for:', folderName);
+    // Trigger the rename dialog in FolderActions
+    if (folderActionsRef.current) {
+      folderActionsRef.current.openRenameDialog(folderName);
+    }
   };
 
   const handleDeleteFolder = (folderName: string) => {
@@ -206,6 +208,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
           </CardTitle>
           <div className="flex items-center space-x-2">
             <FolderActions 
+              ref={folderActionsRef}
               currentPath={currentPath}
               onPathChange={onPathChange}
               onRefresh={handleRefresh}

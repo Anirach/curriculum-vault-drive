@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
@@ -17,184 +16,200 @@ interface FolderActionsProps {
   onRenameFolder?: (oldName: string, newName: string) => void;
 }
 
-export const FolderActions = ({ currentPath, onPathChange, onRefresh, onAddFolder, onRenameFolder }: FolderActionsProps) => {
-  const { hasPermission } = useUser();
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isRenameOpen, setIsRenameOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [renameFolderName, setRenameFolderName] = useState('');
-  const [selectedFolder, setSelectedFolder] = useState<string>('');
+export interface FolderActionsRef {
+  openRenameDialog: (folderName: string) => void;
+}
 
-  const canManageFolders = hasPermission('upload'); // Using upload permission for folder management
+export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
+  ({ currentPath, onPathChange, onRefresh, onAddFolder, onRenameFolder }, ref) => {
+    const { hasPermission } = useUser();
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [isRenameOpen, setIsRenameOpen] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
+    const [renameFolderName, setRenameFolderName] = useState('');
+    const [selectedFolder, setSelectedFolder] = useState<string>('');
 
-  const handleCreateFolder = () => {
-    if (!canManageFolders) {
+    const canManageFolders = hasPermission('upload'); // Using upload permission for folder management
+
+    useImperativeHandle(ref, () => ({
+      openRenameDialog: (folderName: string) => {
+        setSelectedFolder(folderName);
+        setRenameFolderName(folderName);
+        setIsRenameOpen(true);
+      }
+    }));
+
+    const handleCreateFolder = () => {
+      if (!canManageFolders) {
+        toast({
+          title: "Access Denied",
+          description: "You don't have permission to create folders.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!newFolderName.trim()) {
+        toast({
+          title: "Invalid Name",
+          description: "Please enter a valid folder name.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Call the callback to add the folder
+      onAddFolder(newFolderName.trim());
+
       toast({
-        title: "Access Denied",
-        description: "You don't have permission to create folders.",
-        variant: "destructive",
+        title: "Folder Created",
+        description: `"${newFolderName}" has been created successfully.`,
       });
-      return;
-    }
 
-    if (!newFolderName.trim()) {
+      setNewFolderName('');
+      setIsCreateOpen(false);
+      onRefresh();
+    };
+
+    const handleRenameFolder = () => {
+      if (!canManageFolders) {
+        toast({
+          title: "Access Denied",
+          description: "You don't have permission to rename folders.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!renameFolderName.trim()) {
+        toast({
+          title: "Invalid Name",
+          description: "Please enter a valid folder name.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (renameFolderName.trim() === selectedFolder) {
+        setIsRenameOpen(false);
+        return;
+      }
+
+      // Call the callback to rename the folder
+      if (onRenameFolder) {
+        onRenameFolder(selectedFolder, renameFolderName.trim());
+      }
+
       toast({
-        title: "Invalid Name",
-        description: "Please enter a valid folder name.",
-        variant: "destructive",
+        title: "Folder Renamed",
+        description: `Folder has been renamed to "${renameFolderName}".`,
       });
-      return;
-    }
 
-    // Call the callback to add the folder
-    onAddFolder(newFolderName.trim());
-
-    toast({
-      title: "Folder Created",
-      description: `"${newFolderName}" has been created successfully.`,
-    });
-
-    setNewFolderName('');
-    setIsCreateOpen(false);
-    onRefresh();
-  };
-
-  const handleRenameFolder = () => {
-    if (!canManageFolders) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have permission to rename folders.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!renameFolderName.trim()) {
-      toast({
-        title: "Invalid Name",
-        description: "Please enter a valid folder name.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (renameFolderName.trim() === selectedFolder) {
+      setRenameFolderName('');
       setIsRenameOpen(false);
-      return;
-    }
+      onRefresh();
+    };
 
-    // Call the callback to rename the folder
-    if (onRenameFolder) {
-      onRenameFolder(selectedFolder, renameFolderName.trim());
-    }
+    const handleDeleteFolder = (folderName: string) => {
+      if (!hasPermission('delete')) {
+        toast({
+          title: "Access Denied",
+          description: "You don't have permission to delete folders.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    toast({
-      title: "Folder Renamed",
-      description: `Folder has been renamed to "${renameFolderName}".`,
-    });
-
-    setRenameFolderName('');
-    setIsRenameOpen(false);
-    onRefresh();
-  };
-
-  const handleDeleteFolder = (folderName: string) => {
-    if (!hasPermission('delete')) {
+      // In a real app, this would call the Google Drive API
       toast({
-        title: "Access Denied",
-        description: "You don't have permission to delete folders.",
-        variant: "destructive",
+        title: "Folder Deleted",
+        description: `"${folderName}" has been deleted successfully.`,
       });
-      return;
-    }
 
-    // In a real app, this would call the Google Drive API
-    toast({
-      title: "Folder Deleted",
-      description: `"${folderName}" has been deleted successfully.`,
-    });
+      onRefresh();
+    };
 
-    onRefresh();
-  };
+    const openRenameDialog = (folderName: string) => {
+      setSelectedFolder(folderName);
+      setRenameFolderName(folderName);
+      setIsRenameOpen(true);
+    };
 
-  const openRenameDialog = (folderName: string) => {
-    setSelectedFolder(folderName);
-    setRenameFolderName(folderName);
-    setIsRenameOpen(true);
-  };
+    return (
+      <div className="flex items-center space-x-2">
+        {canManageFolders && (
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline">
+                <FolderPlus className="w-4 h-4 mr-2" />
+                New Folder
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Folder</DialogTitle>
+                <DialogDescription>
+                  Enter a name for the new folder.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Folder Name</label>
+                  <Input
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    placeholder="Enter folder name"
+                    onKeyPress={(e) => e.key === 'Enter' && handleCreateFolder()}
+                  />
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCreateFolder}>
+                    Create
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
 
-  return (
-    <div className="flex items-center space-x-2">
-      {canManageFolders && (
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" variant="outline">
-              <FolderPlus className="w-4 h-4 mr-2" />
-              New Folder
-            </Button>
-          </DialogTrigger>
+        <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New Folder</DialogTitle>
+              <DialogTitle>Rename Folder</DialogTitle>
               <DialogDescription>
-                Enter a name for the new folder.
+                Enter a new name for "{selectedFolder}".
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Folder Name</label>
+                <label className="text-sm font-medium">New Name</label>
                 <Input
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder="Enter folder name"
-                  onKeyPress={(e) => e.key === 'Enter' && handleCreateFolder()}
+                  value={renameFolderName}
+                  onChange={(e) => setRenameFolderName(e.target.value)}
+                  placeholder="Enter new name"
+                  onKeyPress={(e) => e.key === 'Enter' && handleRenameFolder()}
                 />
               </div>
               <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                <Button variant="outline" onClick={() => setIsRenameOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleCreateFolder}>
-                  Create
+                <Button onClick={handleRenameFolder}>
+                  Rename
                 </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
-      )}
+      </div>
+    );
+  }
+);
 
-      <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename Folder</DialogTitle>
-            <DialogDescription>
-              Enter a new name for "{selectedFolder}".
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">New Name</label>
-              <Input
-                value={renameFolderName}
-                onChange={(e) => setRenameFolderName(e.target.value)}
-                placeholder="Enter new name"
-                onKeyPress={(e) => e.key === 'Enter' && handleRenameFolder()}
-              />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setIsRenameOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleRenameFolder}>
-                Rename
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-};
+FolderActions.displayName = 'FolderActions';
 
 export const FolderContextMenu = ({ 
   folder, 
