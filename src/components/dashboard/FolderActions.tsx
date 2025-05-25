@@ -14,6 +14,9 @@ interface FolderActionsProps {
   onRefresh: () => void;
   onAddFolder: (folderName: string) => void;
   onRenameFolder?: (oldName: string, newName: string) => void;
+  disabled?: boolean;
+  userRole?: 'Admin' | 'Viewer';
+  accessToken?: string;
 }
 
 export interface FolderActionsRef {
@@ -21,7 +24,7 @@ export interface FolderActionsRef {
 }
 
 export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
-  ({ currentPath, onPathChange, onRefresh, onAddFolder, onRenameFolder }, ref) => {
+  ({ currentPath, onPathChange, onRefresh, onAddFolder, onRenameFolder, disabled, userRole, accessToken }, ref) => {
     const { hasPermission } = useUser();
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isRenameOpen, setIsRenameOpen] = useState(false);
@@ -39,7 +42,7 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
       }
     }));
 
-    const handleCreateFolder = () => {
+    const handleCreateFolder = async () => {
       if (!canManageFolders) {
         toast({
           title: "Access Denied",
@@ -48,7 +51,6 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
         });
         return;
       }
-
       if (!newFolderName.trim()) {
         toast({
           title: "Invalid Name",
@@ -57,15 +59,50 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
         });
         return;
       }
-
-      // Call the callback to add the folder
+      // ถ้าเป็น Admin และมี accessToken ให้เรียก Google Drive API
+      if (userRole === 'Admin' && accessToken) {
+        try {
+          // หา parentId จาก currentPath (root ใช้ driveUrl, subfolder ต้อง mapping เพิ่ม)
+          // ที่นี่จะใช้ parentId เป็น currentPath[currentPath.length-1] หรือ undefined ถ้า root
+          // (ในโปรเจคจริงควร map path เป็น id)
+          const parentId = undefined; // TODO: implement path->id mapping
+          const body = {
+            name: newFolderName.trim(),
+            mimeType: 'application/vnd.google-apps.folder',
+            ...(parentId ? { parents: [parentId] } : {})
+          };
+          const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) throw new Error('Google Drive API error');
+          toast({
+            title: "Folder Created",
+            description: `"${newFolderName}" has been created in Google Drive.`,
+          });
+          setNewFolderName('');
+          setIsCreateOpen(false);
+          onRefresh();
+          return;
+        } catch (e) {
+          toast({
+            title: "Error",
+            description: "Failed to create folder in Google Drive.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+      // fallback: mock
       onAddFolder(newFolderName.trim());
-
       toast({
         title: "Folder Created",
-        description: `"${newFolderName}" has been created successfully.`,
+        description: `${newFolderName} has been created successfully.`,
       });
-
       setNewFolderName('');
       setIsCreateOpen(false);
       onRefresh();
@@ -137,7 +174,7 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
 
     return (
       <div className="flex items-center space-x-2">
-        {canManageFolders && (
+        {canManageFolders && !disabled && (
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline">

@@ -13,14 +13,18 @@ interface FileBrowserProps {
   currentPath: string[];
   onPathChange: (path: string[]) => void;
   onFileSelect: (file: FileItem) => void;
+  rootFolders?: FileItem[];
+  userRole?: 'Admin' | 'Viewer';
+  accessToken?: string;
 }
 
-export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBrowserProps) => {
+export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolders, userRole, accessToken }: FileBrowserProps) => {
   const { hasPermission } = useUser();
   const [searchQuery, setSearchQuery] = useState('');
   const [files, setFiles] = useState<FileItem[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const folderActionsRef = useRef<FolderActionsRef>(null);
+  const isDriveReadonly = !!rootFolders;
 
   // Mock data structure - in real app, this would come from Google Drive API
   const [mockFileStructure, setMockFileStructure] = useState<Record<string, FileItem[]>>({
@@ -48,8 +52,68 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
 
   useEffect(() => {
     const pathKey = currentPath.join('/');
-    setFiles(mockFileStructure[pathKey] || []);
-  }, [currentPath, refreshTrigger, mockFileStructure]);
+    
+    // If we are at the root (Faculties) and rootFolders are provided (Google Drive mode)
+    if (currentPath.length === 0 && rootFolders) {
+      setFiles(rootFolders);
+    } 
+    // If we are in a subfolder and have an accessToken (Google Drive mode)
+    else if (currentPath.length > 0 && accessToken) {
+      // To fetch subfolder contents, we need the parent folder's ID.
+      // The parent folder's path is currentPath.slice(0, -1).
+      // We need to find the ID of the folder corresponding to the last segment of currentPath,
+      // but within the parent's list of children (which were previously in the 'files' state).
+      // This requires a way to map the path segments to their Google Drive IDs.
+      // A simplified approach for now: If currentPath has one segment, it's a root folder clicked.
+      // The ID would be found in the original rootFolders.
+
+      const parentPath = currentPath.slice(0, -1).join('/');
+      const clickedFolderName = currentPath[currentPath.length - 1];
+
+      // Find the parent folder's children that were last displayed
+      // This logic might be tricky if navigating several levels deep. A more robust solution
+      // would be to store folder IDs in the path state or a map.
+      
+      // For the simple case (navigating from root to a first-level folder):
+      if (currentPath.length === 1 && rootFolders) {
+        const parentFolder = rootFolders.find(f => f.name === clickedFolderName && f.type === 'folder');
+        if (parentFolder?.id) {
+           fetch(`https://www.googleapis.com/drive/v3/files?q='${parentFolder.id}'+in+parents+and+trashed=false&fields=files(id,name,mimeType,size,modifiedTime)&access_token=${accessToken}`)
+            .then(res => res.json())
+            .then(data => {
+              if (!data.files || !Array.isArray(data.files)) {
+                setFiles([]);
+                return;
+              }
+               const items = (data.files as any[]).map((item) => ({
+                 id: item.id,
+                 name: item.name,
+                 type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' as 'folder' | 'file',
+                 path: [...currentPath, item.name], // Note: Path construction needs review for deeper levels
+                 url: item.mimeType !== 'application/vnd.google-apps.folder' ? `https://drive.google.com/uc?id=${item.id}&export=download` : undefined,
+                 size: item.size,
+                 lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
+               }));
+               setFiles(items);
+            })
+            .catch((e) => {
+               console.error('Error fetching subfolder files:', e);
+               setFiles([]);
+            });
+        } else {
+            setFiles([]); // Could not find parent ID
+        }
+      } else {
+         // Fallback or more complex logic needed for deeper levels
+         setFiles([]);
+      }
+
+    } 
+    // Fallback to mock data if not in Google Drive mode or no accessToken for subfolders
+    else {
+      setFiles(mockFileStructure[pathKey] || []);
+    }
+  }, [currentPath, refreshTrigger, mockFileStructure, rootFolders, accessToken]);
 
   const filteredFiles = files.filter(file =>
     file.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -214,6 +278,9 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
               onRefresh={handleRefresh}
               onAddFolder={addNewFolder}
               onRenameFolder={renameFolder}
+              disabled={userRole !== 'Admin' || !accessToken}
+              userRole={userRole}
+              accessToken={accessToken}
             />
             {hasPermission('upload') && (
               <Button onClick={handleUpload} size="sm" className="bg-blue-600 hover:bg-blue-700">
