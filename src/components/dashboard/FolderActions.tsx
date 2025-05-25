@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,9 +14,10 @@ interface FolderActionsProps {
   onPathChange: (path: string[]) => void;
   onRefresh: () => void;
   onAddFolder: (folderName: string) => void;
+  onRenameFolder?: (oldName: string, newName: string) => void;
 }
 
-export const FolderActions = ({ currentPath, onPathChange, onRefresh, onAddFolder }: FolderActionsProps) => {
+export const FolderActions = ({ currentPath, onPathChange, onRefresh, onAddFolder, onRenameFolder }: FolderActionsProps) => {
   const { hasPermission } = useUser();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
@@ -76,7 +78,16 @@ export const FolderActions = ({ currentPath, onPathChange, onRefresh, onAddFolde
       return;
     }
 
-    // In a real app, this would call the Google Drive API
+    if (renameFolderName.trim() === selectedFolder) {
+      setIsRenameOpen(false);
+      return;
+    }
+
+    // Call the callback to rename the folder
+    if (onRenameFolder) {
+      onRenameFolder(selectedFolder, renameFolderName.trim());
+    }
+
     toast({
       title: "Folder Renamed",
       description: `Folder has been renamed to "${renameFolderName}".`,
@@ -157,7 +168,7 @@ export const FolderActions = ({ currentPath, onPathChange, onRefresh, onAddFolde
           <DialogHeader>
             <DialogTitle>Rename Folder</DialogTitle>
             <DialogDescription>
-              Enter a new name for the folder.
+              Enter a new name for "{selectedFolder}".
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

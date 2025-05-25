@@ -77,6 +77,42 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
     handleRefresh();
   };
 
+  const renameFolder = (oldName: string, newName: string) => {
+    const pathKey = currentPath.join('/');
+    
+    setMockFileStructure(prev => {
+      const newStructure = { ...prev };
+      
+      // Update the folder name in the current path
+      if (newStructure[pathKey]) {
+        newStructure[pathKey] = newStructure[pathKey].map(item => 
+          item.name === oldName && item.type === 'folder' 
+            ? { ...item, name: newName, path: [...currentPath, newName] }
+            : item
+        );
+      }
+      
+      // Update any nested paths that reference this folder
+      const oldFolderPath = [...currentPath, oldName].join('/');
+      const newFolderPath = [...currentPath, newName].join('/');
+      
+      // Move data from old path to new path
+      if (newStructure[oldFolderPath]) {
+        newStructure[newFolderPath] = newStructure[oldFolderPath].map(item => ({
+          ...item,
+          path: item.path.map((segment, index) => 
+            index === currentPath.length && segment === oldName ? newName : segment
+          )
+        }));
+        delete newStructure[oldFolderPath];
+      }
+      
+      return newStructure;
+    });
+
+    handleRefresh();
+  };
+
   const handleFolderClick = (folder: FileItem) => {
     onPathChange(folder.path);
   };
@@ -134,10 +170,8 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
   };
 
   const handleRenameFolder = (folderName: string) => {
-    toast({
-      title: "Rename Folder",
-      description: `Rename functionality for "${folderName}" would be implemented here.`,
-    });
+    // This will be handled by the FolderActions component through the rename dialog
+    console.log('Rename folder requested for:', folderName);
   };
 
   const handleDeleteFolder = (folderName: string) => {
@@ -176,6 +210,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
               onPathChange={onPathChange}
               onRefresh={handleRefresh}
               onAddFolder={addNewFolder}
+              onRenameFolder={renameFolder}
             />
             {hasPermission('upload') && (
               <Button onClick={handleUpload} size="sm" className="bg-blue-600 hover:bg-blue-700">
