@@ -3,9 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, Folder, FileText, Search, ArrowLeft, Trash2, Download } from 'lucide-react';
+import { Upload, Folder, FileText, Search, ArrowLeft, Trash2, Download, Edit } from 'lucide-react';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useUser } from '@/contexts/UserContext';
 import { FileItem } from './Dashboard';
+import { FolderActions } from './FolderActions';
 import { toast } from '@/hooks/use-toast';
 
 interface FileBrowserProps {
@@ -18,6 +20,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
   const { hasPermission } = useUser();
   const [searchQuery, setSearchQuery] = useState('');
   const [files, setFiles] = useState<FileItem[]>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Mock data structure - in real app, this would come from Google Drive API
   const mockFileStructure: Record<string, FileItem[]> = {
@@ -46,11 +49,15 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
   useEffect(() => {
     const pathKey = currentPath.join('/');
     setFiles(mockFileStructure[pathKey] || []);
-  }, [currentPath]);
+  }, [currentPath, refreshTrigger]);
 
   const filteredFiles = files.filter(file =>
     file.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   const handleFolderClick = (folder: FileItem) => {
     onPathChange(folder.path);
@@ -108,6 +115,31 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
     });
   };
 
+  const handleRenameFolder = (folderName: string) => {
+    // This would trigger the rename dialog in FolderActions
+    toast({
+      title: "Rename Folder",
+      description: `Rename functionality for "${folderName}" would be implemented here.`,
+    });
+  };
+
+  const handleDeleteFolder = (folderName: string) => {
+    if (!hasPermission('delete')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to delete folders.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Folder Deleted",
+      description: `"${folderName}" has been deleted.`,
+    });
+    handleRefresh();
+  };
+
   return (
     <Card className="flex-1 m-4 mr-2">
       <CardHeader className="pb-4">
@@ -116,6 +148,11 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
             {currentPath.length === 0 ? 'Faculties' : currentPath[currentPath.length - 1]}
           </CardTitle>
           <div className="flex items-center space-x-2">
+            <FolderActions 
+              currentPath={currentPath}
+              onPathChange={onPathChange}
+              onRefresh={handleRefresh}
+            />
             {hasPermission('upload') && (
               <Button onClick={handleUpload} size="sm" className="bg-blue-600 hover:bg-blue-700">
                 <Upload className="w-4 h-4 mr-2" />
@@ -178,54 +215,73 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect }: FileBro
             </div>
           ) : (
             filteredFiles.map((file) => (
-              <div
-                key={file.id}
-                className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
-                onClick={() => file.type === 'folder' ? handleFolderClick(file) : handleFileClick(file)}
-              >
-                <div className="flex items-center space-x-3">
-                  {file.type === 'folder' ? (
-                    <Folder className="w-5 h-5 text-blue-600" />
-                  ) : (
-                    <FileText className="w-5 h-5 text-red-600" />
-                  )}
-                  <div>
-                    <p className="font-medium text-gray-900">{file.name}</p>
+              <ContextMenu key={file.id}>
+                <ContextMenuTrigger asChild>
+                  <div
+                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => file.type === 'folder' ? handleFolderClick(file) : handleFileClick(file)}
+                  >
+                    <div className="flex items-center space-x-3">
+                      {file.type === 'folder' ? (
+                        <Folder className="w-5 h-5 text-blue-600" />
+                      ) : (
+                        <FileText className="w-5 h-5 text-red-600" />
+                      )}
+                      <div>
+                        <p className="font-medium text-gray-900">{file.name}</p>
+                        {file.type === 'file' && (
+                          <p className="text-sm text-gray-500">
+                            {file.size} • Modified {file.lastModified}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    
                     {file.type === 'file' && (
-                      <p className="text-sm text-gray-500">
-                        {file.size} • Modified {file.lastModified}
-                      </p>
+                      <div className="flex items-center space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(file);
+                          }}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        {hasPermission('delete') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(file);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
-                </div>
-                
-                {file.type === 'file' && (
-                  <div className="flex items-center space-x-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownload(file);
-                      }}
-                    >
-                      <Download className="w-4 h-4" />
-                    </Button>
+                </ContextMenuTrigger>
+                {file.type === 'folder' && (
+                  <ContextMenuContent>
+                    {hasPermission('upload') && (
+                      <ContextMenuItem onClick={() => handleRenameFolder(file.name)}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Rename
+                      </ContextMenuItem>
+                    )}
                     {hasPermission('delete') && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(file);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
+                      <ContextMenuItem onClick={() => handleDeleteFolder(file.name)}>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </ContextMenuItem>
                     )}
-                  </div>
+                  </ContextMenuContent>
                 )}
-              </div>
+              </ContextMenu>
             ))
           )}
         </div>

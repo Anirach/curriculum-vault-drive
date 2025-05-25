@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { X, Download, ExternalLink } from 'lucide-react';
+import { X, Download, FileText } from 'lucide-react';
 import { FileItem } from './Dashboard';
 
 interface PDFViewerProps {
@@ -12,48 +12,43 @@ interface PDFViewerProps {
 
 export const PDFViewer = ({ file, onClose }: PDFViewerProps) => {
   const handleDownload = () => {
-    // In a real app, this would download from Google Drive
-    console.log(`Downloading ${file.name}`);
+    // In a real app, this would download the actual file
+    const link = document.createElement('a');
+    link.href = file.url || '/sample.pdf';
+    link.download = file.name;
+    link.click();
   };
 
   return (
-    <Card className="w-96 m-4 ml-2 flex flex-col">
-      <CardHeader className="pb-3">
+    <Card className="flex-1 m-4 ml-2">
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold truncate">
+          <CardTitle className="text-lg font-semibold flex items-center">
+            <FileText className="w-5 h-5 mr-2 text-red-600" />
             {file.name}
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button onClick={handleDownload} size="sm" variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              Download
+            </Button>
+            <Button onClick={onClose} size="sm" variant="outline">
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex space-x-2">
-          <Button size="sm" onClick={handleDownload} className="flex-1">
-            <Download className="w-4 h-4 mr-2" />
-            Download
-          </Button>
-          <Button variant="outline" size="sm">
-            <ExternalLink className="w-4 h-4 mr-2" />
-            Open
-          </Button>
-        </div>
+        <p className="text-sm text-gray-500">
+          {file.size} • Modified {file.lastModified}
+        </p>
       </CardHeader>
       
-      <CardContent className="flex-1 p-0">
-        <div className="h-[calc(100vh-200px)] bg-gray-100 rounded-b-lg flex items-center justify-center">
-          {file.url ? (
-            <iframe
-              src={file.url}
-              className="w-full h-full rounded-b-lg"
-              title={file.name}
-            />
-          ) : (
-            <div className="text-center text-gray-500">
-              <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>PDF Preview</p>
-              <p className="text-sm">Click download to view the full document</p>
-            </div>
-          )}
+      <CardContent>
+        <div className="h-[calc(100vh-200px)] border rounded-lg overflow-hidden">
+          <iframe
+            src={file.url || '/sample.pdf'}
+            className="w-full h-full"
+            title={file.name}
+          />
         </div>
       </CardContent>
     </Card>
