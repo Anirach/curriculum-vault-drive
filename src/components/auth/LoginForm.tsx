@@ -77,18 +77,18 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         const user = await userService.login(email);
         if (user) {
           setUser(user);
-          toast({
-            title: "Login Successful",
+        toast({
+          title: "Login Successful",
             description: `Welcome back, ${user.name}!`,
-          });
-          onLogin();
-        } else {
-          toast({
-            title: "Login Failed",
+        });
+        onLogin();
+      } else {
+        toast({
+          title: "Login Failed",
             description: "Invalid email address.",
-            variant: "destructive",
-          });
-        }
+          variant: "destructive",
+        });
+      }
       }
     } catch (error) {
       toast({

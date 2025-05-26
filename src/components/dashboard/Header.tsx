@@ -26,28 +26,28 @@ export const Header = ({ onConfigDrive }: { onConfigDrive?: () => void }) => {
 
   return (
     <>
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">
-                Curriculum Management System
-              </h1>
-              <p className="text-sm text-gray-500">
-                Faculty → Department → Year → Curriculum
-              </p>
-            </div>
+    <header className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-white" />
           </div>
-          
-          <div className="flex items-center space-x-4">
-            {user && (
-              <>
-                <Badge className={`${getRoleBadgeColor(user.role)} text-white`}>
-                  {user.role}
-                </Badge>
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">
+              Curriculum Management System
+            </h1>
+            <p className="text-sm text-gray-500">
+              Faculty → Department → Year → Curriculum
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          {user && (
+            <>
+              <Badge className={`${getRoleBadgeColor(user.role)} text-white`}>
+                {user.role}
+              </Badge>
                 {user.role === 'Admin' && (
                   <Dialog open={showUserManagement} onOpenChange={setShowUserManagement}>
                     <DialogTrigger asChild>
@@ -64,31 +64,31 @@ export const Header = ({ onConfigDrive }: { onConfigDrive?: () => void }) => {
                     </DialogContent>
                   </Dialog>
                 )}
-                <div className="flex items-center space-x-2">
-                  <Avatar>
-                    <AvatarFallback>
-                      <User className="w-4 h-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="hidden md:block">
-                    <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
-                  </div>
+              <div className="flex items-center space-x-2">
+                <Avatar>
+                  <AvatarFallback>
+                    <User className="w-4 h-4" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="hidden md:block">
+                  <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                  <p className="text-xs text-gray-500">{user.email}</p>
                 </div>
+              </div>
                 {user && user.role === 'Admin' && (
                   <Button variant="outline" size="sm" className="mr-2" onClick={onConfigDrive}>
                     Config Drive
                   </Button>
                 )}
-                <Button variant="outline" size="sm">
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Logout
-                </Button>
-              </>
-            )}
-          </div>
+              <Button variant="outline" size="sm">
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            </>
+          )}
         </div>
-      </header>
+      </div>
+    </header>
     </>
   );
 };

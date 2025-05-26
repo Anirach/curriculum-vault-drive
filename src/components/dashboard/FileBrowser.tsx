@@ -111,7 +111,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     } 
     // Fallback to mock data if not in Google Drive mode or no accessToken for subfolders
     else {
-      setFiles(mockFileStructure[pathKey] || []);
+    setFiles(mockFileStructure[pathKey] || []);
     }
   }, [currentPath, refreshTrigger, mockFileStructure, rootFolders, accessToken]);
 

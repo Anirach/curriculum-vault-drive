@@ -25,13 +25,13 @@ const AppContent = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {!isAuthenticated ? (
-        <LoginForm onLogin={() => setIsAuthenticated(true)} />
-      ) : (
-        <Dashboard />
-      )}
-    </div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        {!isAuthenticated ? (
+          <LoginForm onLogin={() => setIsAuthenticated(true)} />
+        ) : (
+          <Dashboard />
+        )}
+      </div>
   );
 };
 
