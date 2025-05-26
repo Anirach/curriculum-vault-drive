@@ -5,18 +5,56 @@ import { Badge } from '@/components/ui/badge';
 import { GraduationCap, LogOut, User, Users } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { UserManagement } from '../admin/UserManagement';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { userService } from '@/services/userService';
+import { UserRole } from '@/types/user';
 
 export const Header = ({ onConfigDrive }: { onConfigDrive?: () => void }) => {
-  const { user } = useUser();
+  const { user, setUser } = useUser();
   const [showUserManagement, setShowUserManagement] = useState(false);
+  const { toast } = useToast();
 
-  const getRoleBadgeColor = (role: string) => {
+  const handleLogout = async () => {
+    try {
+      // ลบข้อมูลจาก localStorage
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('clientId');
+      localStorage.removeItem('clientSecret');
+      localStorage.removeItem('driveUrl');
+      localStorage.removeItem('currentUser');
+
+      // ล้างข้อมูลจาก IndexedDB
+      await userService.logout();
+      
+      // รีเซ็ต user context
+      setUser(null);
+
+      // แสดง toast
+      toast({
+        title: "ออกจากระบบสำเร็จ",
+        description: "ขอบคุณที่ใช้งานระบบ",
+      });
+
+      // redirect ไปที่หน้าแรก (ซึ่งจะแสดงหน้า login)
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error during logout:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถออกจากระบบได้ กรุณาลองใหม่อีกครั้ง",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
       case 'Admin':
         return 'bg-red-500 hover:bg-red-600';
-      case 'Staff':
-        return 'bg-yellow-500 hover:bg-yellow-600';
       case 'Viewer':
         return 'bg-green-500 hover:bg-green-600';
       default:
@@ -56,9 +94,12 @@ export const Header = ({ onConfigDrive }: { onConfigDrive?: () => void }) => {
                         User Management
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" aria-describedby="user-management-description">
                       <DialogHeader>
                         <DialogTitle>User Management</DialogTitle>
+                        <DialogDescription id="user-management-description">
+                          จัดการผู้ใช้งานระบบ เพิ่ม แก้ไข หรือลบผู้ใช้งาน
+                        </DialogDescription>
                       </DialogHeader>
                       <UserManagement />
                     </DialogContent>
@@ -80,7 +121,7 @@ export const Header = ({ onConfigDrive }: { onConfigDrive?: () => void }) => {
                     Config Drive
                   </Button>
                 )}
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>

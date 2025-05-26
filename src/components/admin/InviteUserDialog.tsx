@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,9 +60,12 @@ export const InviteUserDialog = ({ onInviteSent }: InviteUserDialogProps) => {
           Invite User
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent aria-describedby="invite-user-description">
         <DialogHeader>
           <DialogTitle>Invite New User</DialogTitle>
+          <DialogDescription id="invite-user-description">
+            กรอกอีเมลและกำหนดบทบาทของผู้ใช้ที่ต้องการเชิญเข้าระบบ
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleInvite} className="space-y-4">
           <div className="space-y-2">
@@ -84,7 +87,6 @@ export const InviteUserDialog = ({ onInviteSent }: InviteUserDialogProps) => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Admin">Admin</SelectItem>
-                <SelectItem value="Staff">Staff</SelectItem>
                 <SelectItem value="Viewer">Viewer</SelectItem>
               </SelectContent>
             </Select>

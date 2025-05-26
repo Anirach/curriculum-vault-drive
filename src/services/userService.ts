@@ -1,44 +1,29 @@
 import { User, Invitation, UserRole } from '@/types/user';
+// import { userQueries, settingsQueries } from './database'; // ลบ import นี้
+// import { getDatabase } from './database'; // ลบ import นี้
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-// Mock user data for development
-const MOCK_USERS: User[] = [
-  {
-    id: '1',
-    email: 'anirach.m@fitm.kmutnb.ac.th',
-    name: 'Anirach Mingkhwan',
-    role: 'Admin',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: '2',
-    email: 'staff@example.com',
-    name: 'Staff User',
-    role: 'Staff',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: '3',
-    email: 'viewer@example.com',
-    name: 'Viewer User',
-    role: 'Viewer',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-];
-
 export const userService = {
-  // User management
+  // User management (ปรับให้จัดการด้วย localStorage หรือ logic ภายใน)
   async login(email: string): Promise<User | null> {
     try {
-      // In a real app, this would be an API call
-      const user = MOCK_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
-      if (!user) return null;
+      // กลับไปใช้ logic การตรวจสอบ admin email เดิม
+      const adminEmails = ['anirach.m@fitm.kmutnb.ac.th']; // กำหนด admin email ตรงนี้
+      const userRole: UserRole = adminEmails.includes(email.toLowerCase()) ? 'Admin' : 'Viewer';
+
+      // สร้าง user object (อาจจะต้องปรับตามโครงสร้าง User ที่ต้องการ)
+      const user: User = {
+        id: email, // ใช้ email เป็น ID ชั่วคราว
+        email: email,
+        name: email.split('@')[0], // ชื่อเริ่มต้นจาก email
+        role: userRole,
+        createdAt: new Date(),
+        updatedAt: new Date()
+        // เพิ่ม properties อื่นๆ ถ้าจำเป็นตาม User type
+      };
       
-      // Store user in localStorage for persistence
+      // บันทึก user ใน localStorage
       localStorage.setItem('currentUser', JSON.stringify(user));
       return user;
     } catch (error) {
@@ -49,14 +34,13 @@ export const userService = {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      // Check localStorage first
+      // ดึง user จาก localStorage
       const storedUser = localStorage.getItem('currentUser');
       if (storedUser) {
         const user = JSON.parse(storedUser);
-        return user;
+        // อาจจะตรวจสอบความถูกต้องของ user object ที่นี่ถ้าจำเป็น
+        return user as User;
       }
-
-      // In a real app, this would be an API call
       return null;
     } catch (error) {
       console.error('Error fetching current user:', error);
@@ -65,22 +49,46 @@ export const userService = {
   },
 
   async logout(): Promise<void> {
+    // ล้าง user จาก localStorage
     localStorage.removeItem('currentUser');
+    // อาจจะต้องล้างข้อมูล Google token ด้วย ถ้าไม่ได้ทำใน Header
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('clientId');
+    localStorage.removeItem('clientSecret');
+    localStorage.removeItem('driveUrl');
   },
 
+  // ฟังก์ชัน updateUserRole อาจจะไม่มีการใช้งานถ้าไม่มีระบบจัดการผู้ใช้แบบเต็มรูปแบบ
   async updateUserRole(userId: string, role: UserRole): Promise<User | null> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/users/${userId}/role`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
-      });
-      if (!response.ok) return null;
-      return response.json();
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      return null;
-    }
+    console.warn('updateUserRole is not implemented without a database');
+    return null; // หรือจะ throw error ก็ได้
+  },
+
+  // Google Drive settings (ปรับให้จัดการด้วย localStorage หรือ logic ภายใน)
+  async getGoogleDriveSettings() {
+    // ดึงการตั้งค่าจาก localStorage
+    const clientId = localStorage.getItem('clientId');
+    const clientSecret = localStorage.getItem('clientSecret');
+    const driveUrl = localStorage.getItem('driveUrl');
+    return {
+      clientId,
+      clientSecret,
+      driveUrl
+    };
+  },
+
+  async setGoogleDriveSettings(settings: {
+    clientId: string;
+    clientSecret: string;
+    driveUrl: string;
+  }) {
+    // บันทึกการตั้งค่าลง localStorage
+    localStorage.setItem('clientId', settings.clientId);
+    localStorage.setItem('clientSecret', settings.clientSecret);
+    localStorage.setItem('driveUrl', settings.driveUrl);
   },
 
   // Invitation management

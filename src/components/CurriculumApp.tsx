@@ -10,6 +10,8 @@ const AppContent = () => {
   useEffect(() => {
     if (user) {
       setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
     }
   }, [user]);
 
@@ -26,11 +28,7 @@ const AppContent = () => {
 
   return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        {!isAuthenticated ? (
-          <LoginForm onLogin={() => setIsAuthenticated(true)} />
-        ) : (
-          <Dashboard />
-        )}
+        <Dashboard onAdminLogin={() => { /* จะส่ง handleGoogleLogin จาก Dashboard ขึ้นมาที่นี่ */ }} />
       </div>
   );
 };

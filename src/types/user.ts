@@ -1,4 +1,4 @@
-export type UserRole = 'Admin' | 'Staff' | 'Viewer';
+export type UserRole = 'Admin' | 'Viewer';
 
 export interface User {
   id: string;
@@ -36,14 +36,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, UserPermission> = {
       view: true,
       upload: true,
       delete: true,
-    },
-  },
-  Staff: {
-    role: 'Staff',
-    permissions: {
-      view: true,
-      upload: true,
-      delete: false,
     },
   },
   Viewer: {

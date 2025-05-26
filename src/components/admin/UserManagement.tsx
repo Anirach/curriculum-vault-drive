@@ -83,8 +83,6 @@ export const UserManagement = () => {
     switch (role) {
       case 'Admin':
         return 'bg-red-500 hover:bg-red-600';
-      case 'Staff':
-        return 'bg-yellow-500 hover:bg-yellow-600';
       case 'Viewer':
         return 'bg-green-500 hover:bg-green-600';
       default:
@@ -143,7 +141,6 @@ export const UserManagement = () => {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Admin">Admin</SelectItem>
-                            <SelectItem value="Staff">Staff</SelectItem>
                             <SelectItem value="Viewer">Viewer</SelectItem>
                           </SelectContent>
                         </Select>

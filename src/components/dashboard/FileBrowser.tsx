@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,13 +8,14 @@ import { useUser } from '@/contexts/UserContext';
 import { FileItem } from './Dashboard';
 import { FolderActions, FolderActionsRef } from './FolderActions';
 import { toast } from '@/hooks/use-toast';
+import { UserRole } from '@/types/user';
 
 interface FileBrowserProps {
   currentPath: string[];
   onPathChange: (path: string[]) => void;
   onFileSelect: (file: FileItem) => void;
   rootFolders?: FileItem[];
-  userRole?: 'Admin' | 'Viewer';
+  userRole?: UserRole;
   accessToken?: string;
 }
 
@@ -26,94 +27,72 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   const folderActionsRef = useRef<FolderActionsRef>(null);
   const isDriveReadonly = !!rootFolders;
 
-  // Mock data structure - in real app, this would come from Google Drive API
-  const [mockFileStructure, setMockFileStructure] = useState<Record<string, FileItem[]>>({
-    '': [
-      { id: '1', name: 'Engineering', type: 'folder', path: ['Engineering'] },
-      { id: '2', name: 'Business', type: 'folder', path: ['Business'] },
-      { id: '3', name: 'Arts & Sciences', type: 'folder', path: ['Arts & Sciences'] },
-    ],
-    'Engineering': [
-      { id: '4', name: 'Computer Science', type: 'folder', path: ['Engineering', 'Computer Science'] },
-      { id: '5', name: 'Mechanical Engineering', type: 'folder', path: ['Engineering', 'Mechanical Engineering'] },
-      { id: '6', name: 'Electrical Engineering', type: 'folder', path: ['Engineering', 'Electrical Engineering'] },
-    ],
-    'Engineering/Computer Science': [
-      { id: '7', name: '2024', type: 'folder', path: ['Engineering', 'Computer Science', '2024'] },
-      { id: '8', name: '2023', type: 'folder', path: ['Engineering', 'Computer Science', '2023'] },
-      { id: '9', name: '2022', type: 'folder', path: ['Engineering', 'Computer Science', '2022'] },
-    ],
-    'Engineering/Computer Science/2024': [
-      { id: '10', name: 'Data Structures Curriculum.pdf', type: 'file', path: ['Engineering', 'Computer Science', '2024'], url: '/sample.pdf', size: '2.4 MB', lastModified: '2024-03-15' },
-      { id: '11', name: 'Algorithms Curriculum.pdf', type: 'file', path: ['Engineering', 'Computer Science', '2024'], url: '/sample.pdf', size: '1.8 MB', lastModified: '2024-03-10' },
-      { id: '12', name: 'Software Engineering Curriculum.pdf', type: 'file', path: ['Engineering', 'Computer Science', '2024'], url: '/sample.pdf', size: '3.2 MB', lastModified: '2024-03-08' },
-    ],
-  });
+  const fetchFilesLocal = useCallback(async (folderIdToFetch: string, token: string) => {
+    console.log('Fetching files from Google Drive...', { folderId: folderIdToFetch });
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q='${folderIdToFetch}'+in+parents+and+trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink)&access_token=${token}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-  useEffect(() => {
-    const pathKey = currentPath.join('/');
-    
-    // If we are at the root (Faculties) and rootFolders are provided (Google Drive mode)
-    if (currentPath.length === 0 && rootFolders) {
-      setFiles(rootFolders);
-    } 
-    // If we are in a subfolder and have an accessToken (Google Drive mode)
-    else if (currentPath.length > 0 && accessToken) {
-      // To fetch subfolder contents, we need the parent folder's ID.
-      // The parent folder's path is currentPath.slice(0, -1).
-      // We need to find the ID of the folder corresponding to the last segment of currentPath,
-      // but within the parent's list of children (which were previously in the 'files' state).
-      // This requires a way to map the path segments to their Google Drive IDs.
-      // A simplified approach for now: If currentPath has one segment, it's a root folder clicked.
-      // The ID would be found in the original rootFolders.
-
-      const parentPath = currentPath.slice(0, -1).join('/');
-      const clickedFolderName = currentPath[currentPath.length - 1];
-
-      // Find the parent folder's children that were last displayed
-      // This logic might be tricky if navigating several levels deep. A more robust solution
-      // would be to store folder IDs in the path state or a map.
-      
-      // For the simple case (navigating from root to a first-level folder):
-      if (currentPath.length === 1 && rootFolders) {
-        const parentFolder = rootFolders.find(f => f.name === clickedFolderName && f.type === 'folder');
-        if (parentFolder?.id) {
-           fetch(`https://www.googleapis.com/drive/v3/files?q='${parentFolder.id}'+in+parents+and+trashed=false&fields=files(id,name,mimeType,size,modifiedTime)&access_token=${accessToken}`)
-            .then(res => res.json())
-            .then(data => {
-              if (!data.files || !Array.isArray(data.files)) {
-                setFiles([]);
-                return;
-              }
-               const items = (data.files as any[]).map((item) => ({
-                 id: item.id,
-                 name: item.name,
-                 type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' as 'folder' | 'file',
-                 path: [...currentPath, item.name], // Note: Path construction needs review for deeper levels
-                 url: item.mimeType !== 'application/vnd.google-apps.folder' ? `https://drive.google.com/uc?id=${item.id}&export=download` : undefined,
-                 size: item.size,
-                 lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
-               }));
-               setFiles(items);
-            })
-            .catch((e) => {
-               console.error('Error fetching subfolder files:', e);
-               setFiles([]);
-            });
-        } else {
-            setFiles([]); // Could not find parent ID
-        }
-      } else {
-         // Fallback or more complex logic needed for deeper levels
-         setFiles([]);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error('Google Drive API error during fetchFilesLocal:', response.status, errorData);
+        throw new Error(`Google Drive API error: ${errorData.error?.message || response.statusText}`);
       }
 
-    } 
-    // Fallback to mock data if not in Google Drive mode or no accessToken for subfolders
-    else {
-    setFiles(mockFileStructure[pathKey] || []);
+      const data = await response.json();
+      if (!data.files || !Array.isArray(data.files)) {
+        console.log('No files found or invalid response structure in fetchFilesLocal.');
+        setFiles([]);
+        return;
+      }
+
+      console.log('Files fetched successfully in fetchFilesLocal:', data.files.length);
+      interface GoogleDriveFileItem {
+        id: string;
+        name: string;
+        mimeType: string;
+        size?: string;
+        modifiedTime?: string;
+        webViewLink?: string;
+      }
+      const items = (data.files as GoogleDriveFileItem[]).map((item) => ({
+        id: item.id,
+        name: item.name,
+        type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' as 'folder' | 'file',
+        path: [], // path is managed at the Dashboard level
+        url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
+        size: item.size,
+        lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
+      }));
+      setFiles(items);
+    } catch (error) {
+      console.error('Error fetching files in fetchFilesLocal:', error);
+      setFiles([]);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: `ไม่สามารถดึงข้อมูลจาก Google Drive ได้: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
     }
-  }, [currentPath, refreshTrigger, mockFileStructure, rootFolders, accessToken]);
+  }, [toast]);
+
+  useEffect(() => {
+    console.log('FileBrowser useEffect triggered', { currentPath, hasRootFolders: !!rootFolders, hasAccessToken: !!accessToken });
+
+    if (currentPath.length === 0 && rootFolders) {
+      console.log('Setting files to rootFolders');
+      setFiles(rootFolders);
+    } else if (currentPath.length > 0 && accessToken) {
+      const folderIdToFetch = currentPath[currentPath.length - 1];
+      console.log('Attempting to fetch files for subfolder:', folderIdToFetch);
+      fetchFilesLocal(folderIdToFetch, accessToken);
+    } else {
+      console.log('Not at root with rootFolders or in subfolder with accessToken, clearing files');
+      setFiles([]);
+    }
+  }, [currentPath, refreshTrigger, rootFolders, accessToken, fetchFilesLocal]);
 
   const filteredFiles = files.filter(file =>
     file.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -123,66 +102,200 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     setRefreshTrigger(prev => prev + 1);
   };
 
-  const addNewFolder = (folderName: string) => {
-    const pathKey = currentPath.join('/');
-    const newId = Date.now().toString();
-    const newFolder: FileItem = {
-      id: newId,
-      name: folderName,
-      type: 'folder',
-      path: [...currentPath, folderName]
-    };
-
-    setMockFileStructure(prev => ({
-      ...prev,
-      [pathKey]: [...(prev[pathKey] || []), newFolder]
-    }));
-
-    handleRefresh();
-  };
-
-  const renameFolder = (oldName: string, newName: string) => {
-    const pathKey = currentPath.join('/');
-    
-    setMockFileStructure(prev => {
-      const newStructure = { ...prev };
-      
-      // Update the folder name in the current path
-      if (newStructure[pathKey]) {
-        newStructure[pathKey] = newStructure[pathKey].map(item => 
-          item.name === oldName && item.type === 'folder' 
-            ? { ...item, name: newName, path: [...currentPath, newName] }
-            : item
-        );
+  const getParentIdForNewFolder = (): string | undefined => {
+    if (currentPath.length === 0) {
+      const driveUrl = localStorage.getItem('driveUrl');
+      if (!driveUrl) {
+        console.error('getParentIdForNewFolder: driveUrl not found in localStorage.');
+        return undefined;
       }
-      
-      // Update any nested paths that reference this folder
-      const oldFolderPath = [...currentPath, oldName].join('/');
-      const newFolderPath = [...currentPath, newName].join('/');
-      
-      // Move data from old path to new path
-      if (newStructure[oldFolderPath]) {
-        newStructure[newFolderPath] = newStructure[oldFolderPath].map(item => ({
-          ...item,
-          path: item.path.map((segment, index) => 
-            index === currentPath.length && segment === oldName ? newName : segment
-          )
-        }));
-        delete newStructure[oldFolderPath];
+      const match = driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
+      if (!match || !match[1]) {
+         console.error('getParentIdForNewFolder: Invalid driveUrl format.', driveUrl);
+         return undefined;
       }
-      
-      return newStructure;
-    });
-
-    handleRefresh();
+      return match[1];
+    } else {
+      return currentPath[currentPath.length - 1];
+    }
   };
 
-  const handleFolderClick = (folder: FileItem) => {
-    onPathChange(folder.path);
+  const addNewFolder = async (folderName: string) => {
+    if (!accessToken) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่พบ Access Token กรุณาเข้าสู่ระบบใหม่",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const parentId = getParentIdForNewFolder();
+
+      if (!parentId) {
+        console.error('addNewFolder: Failed to determine parentId.', { currentPath });
+        throw new Error('ไม่สามารถระบุโฟลเดอร์หลักสำหรับสร้างโฟลเดอร์ได้');
+      }
+
+      console.log('Attempting to create folder with parent ID:', parentId);
+
+      const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: folderName.trim(),
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [parentId]
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error('Google Drive API error during folder creation:', response.status, errorData);
+        const errorMessage = errorData?.error?.message || response.statusText || "Unknown error";
+        throw new Error(`เกิดข้อผิดพลาดในการสร้างโฟลเดอร์: ${errorMessage}`);
+      }
+
+      toast({
+        title: "สร้างโฟลเดอร์สำเร็จ",
+        description: `สร้างโฟลเดอร์ "${folderName}" ใน Google Drive เรียบร้อยแล้ว`,
+      });
+
+      handleRefresh();
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: error instanceof Error ? error.message : "ไม่สามารถสร้างโฟลเดอร์ใน Google Drive ได้",
+        variant: "destructive",
+      });
+      throw error;
+    }
   };
 
-  const handleFileClick = (file: FileItem) => {
-    onFileSelect(file);
+  const renameFolder = async (oldName: string, newName: string) => {
+    if (!accessToken) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่พบ Access Token กรุณาเข้าสู่ระบบใหม่",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const folderToRename = files.find(f => f.name === oldName && f.type === 'folder');
+      if (!folderToRename?.id) {
+        throw new Error('ไม่พบโฟลเดอร์ที่ต้องการเปลี่ยนชื่อ');
+      }
+
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${folderToRename.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newName.trim()
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(`เกิดข้อผิดพลาดในการเปลี่ยนชื่อโฟลเดอร์: ${response.status} ${response.statusText}`);
+      }
+
+      toast({
+        title: "เปลี่ยนชื่อโฟลเดอร์สำเร็จ",
+        description: `เปลี่ยนชื่อโฟลเดอร์เป็น "${newName}" เรียบร้อยแล้ว`,
+      });
+
+      handleRefresh();
+    } catch (error) {
+      console.error('Error renaming folder:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: error instanceof Error ? error.message : "ไม่สามารถเปลี่ยนชื่อโฟลเดอร์ได้",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
+  const deleteFolder = async (folderId: string) => {
+    if (!accessToken) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่พบ Access Token กรุณาเข้าสู่ระบบใหม่",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(`เกิดข้อผิดพลาดในการลบโฟลเดอร์: ${response.status} ${response.statusText}`);
+      }
+
+      toast({
+        title: "ลบโฟลเดอร์สำเร็จ",
+        description: `ลบโฟลเดอร์เรียบร้อยแล้ว`,
+      });
+
+      handleRefresh();
+    } catch (error) {
+      console.error('Error deleting folder:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: error instanceof Error ? error.message : "ไม่สามารถลบโฟลเดอร์ได้",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
+  // ปรับปรุงฟังก์ชัน getFolderName อีกครั้ง
+  const getFolderName = (folderId: string): string => {
+    // ตรวจสอบใน rootFolders เสมอ เพราะ rootFolders ควรมีข้อมูลของโฟลเดอร์ระดับบนทั้งหมด
+    const rootFolder = rootFolders?.find(f => f.id === folderId);
+    if (rootFolder) {
+      return rootFolder.name;
+    }
+    // หากไม่เจอใน rootFolders (อาจเป็นโฟลเดอร์ที่สร้างขึ้นใหม่ใน subfolder)
+    // ให้ค้นหาในรายการ files ที่แสดงอยู่ในปัจจุบัน
+    const currentFolder = files.find(f => f.id === folderId);
+     if (currentFolder) {
+       return currentFolder.name;
+     }
+    // หากยังไม่เจอ (อาจเป็นโฟลเดอร์แม่ที่ไม่ได้อยู่ใน files ปัจจุบัน)
+    // เราไม่มีข้อมูลชื่อของโฟลเดอร์แม่ที่ลึกๆ นอกเหนือจากที่ fetch มาใน rootFolders หรือ files ปัจจุบัน
+    // ในสถานการณ์นี้ เราจำเป็นต้องมีวิธีเก็บชื่อโฟลเดอร์ที่เข้าชมไว้
+    // หรือ fetch ข้อมูลชื่อของโฟลเดอร์นั้นๆ โดยเฉพาะ
+    // แต่เพื่อแก้ไขปัญหาเบื้องต้นตามภาพ ให้แสดง ID ไปก่อนถ้าหาชื่อไม่ได้จริงๆ
+    console.warn(`getFolderName: Could not find name for folder ID ${folderId}. Displaying ID.`);
+    return folderId;
+  };
+
+
+  const handleItemClick = (item: FileItem) => {
+    if (item.type === 'folder') {
+      const newPath = [...currentPath, item.id];
+      onPathChange(newPath);
+    } else {
+      onFileSelect(item);
+    }
   };
 
   const handleUpload = () => {
@@ -201,6 +314,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
+        // TODO: Implement actual Google Drive upload logic
         toast({
           title: "Upload Successful",
           description: `${file.name} has been uploaded.`,
@@ -220,27 +334,37 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       return;
     }
 
+    // TODO: Implement actual Google Drive delete logic for files
     toast({
       title: "File Deleted",
       description: `${file.name} has been deleted.`,
     });
+    handleRefresh();
   };
 
   const handleDownload = (file: FileItem) => {
-    toast({
-      title: "Download Started",
-      description: `Downloading ${file.name}...`,
-    });
+     if (file.url) {
+       window.open(file.url, '_blank');
+       toast({
+         title: "Download Started",
+         description: `Downloading ${file.name}...`,
+       });
+     } else {
+       toast({
+         title: "Download Failed",
+         description: `Cannot download ${file.name}. URL not available.`,
+         variant: "destructive",
+       });
+     }
   };
 
   const handleRenameFolder = (folderName: string) => {
-    // Trigger the rename dialog in FolderActions
     if (folderActionsRef.current) {
       folderActionsRef.current.openRenameDialog(folderName);
     }
   };
 
-  const handleDeleteFolder = (folderName: string) => {
+  const handleDeleteFolder = async (folderName: string) => {
     if (!hasPermission('delete')) {
       toast({
         title: "Access Denied",
@@ -250,16 +374,17 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       return;
     }
 
-    const pathKey = currentPath.join('/');
-    setMockFileStructure(prev => ({
-      ...prev,
-      [pathKey]: prev[pathKey]?.filter(item => item.name !== folderName) || []
-    }));
+    const folderToDelete = files.find(f => f.name === folderName && f.type === 'folder');
+    if (!folderToDelete?.id) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่พบโฟลเดอร์ที่ต้องการลบ",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    toast({
-      title: "Folder Deleted",
-      description: `"${folderName}" has been deleted.`,
-    });
+    await deleteFolder(folderToDelete.id);
     handleRefresh();
   };
 
@@ -268,19 +393,21 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold">
-            {currentPath.length === 0 ? 'Faculties' : currentPath[currentPath.length - 1]}
+            {currentPath.length === 0 ? 'Faculties' : getFolderName(currentPath[currentPath.length - 1])}
           </CardTitle>
           <div className="flex items-center space-x-2">
-            <FolderActions 
+            <FolderActions
               ref={folderActionsRef}
               currentPath={currentPath}
               onPathChange={onPathChange}
               onRefresh={handleRefresh}
               onAddFolder={addNewFolder}
               onRenameFolder={renameFolder}
-              disabled={userRole !== 'Admin' || !accessToken}
-              userRole={userRole}
+              disabled={!accessToken}
+              userRole={userRole as UserRole}
               accessToken={accessToken}
+              files={files}
+              rootFolders={rootFolders}
             />
             {hasPermission('upload') && (
               <Button onClick={handleUpload} size="sm" className="bg-blue-600 hover:bg-blue-700">
@@ -289,8 +416,8 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
               </Button>
             )}
             {currentPath.length > 0 && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => onPathChange(currentPath.slice(0, -1))}
               >
@@ -302,27 +429,27 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         </div>
         
         {/* Breadcrumb */}
-        {currentPath.length > 0 && (
-          <div className="flex items-center space-x-2 text-sm text-gray-500">
-            <span 
-              className="cursor-pointer hover:text-blue-600"
-              onClick={() => onPathChange([])}
-            >
-              Home
-            </span>
-            {currentPath.map((segment, index) => (
-              <React.Fragment key={index}>
-                <span>/</span>
-                <span 
-                  className="cursor-pointer hover:text-blue-600"
-                  onClick={() => onPathChange(currentPath.slice(0, index + 1))}
-                >
-                  {segment}
-                </span>
-              </React.Fragment>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center space-x-2 text-sm text-gray-500">
+          {/* เปลี่ยน Home เป็น Faculties */}
+          <span
+            className="cursor-pointer hover:text-blue-600"
+            onClick={() => onPathChange([])}
+          >
+            Faculties
+          </span>
+          {currentPath.map((folderId, index) => (
+            <div key={index} className="flex items-center">
+              <span>/</span>
+              <span
+                className="cursor-pointer hover:text-blue-600"
+                onClick={() => onPathChange(currentPath.slice(0, index + 1))}
+              >
+                {/* ใช้ getFolderName เพื่อแสดงชื่อโฟลเดอร์ */}
+                {getFolderName(folderId)}
+              </span>
+            </div>
+          ))}
+        </div>
 
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -350,7 +477,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
                     <ContextMenuTrigger asChild>
                       <div
                         className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => handleFolderClick(file)}
+                        onClick={() => handleItemClick(file)}
                       >
                         <div className="flex items-center space-x-3">
                           <Folder className="w-5 h-5 text-blue-600" />
@@ -361,7 +488,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
                       </div>
                     </ContextMenuTrigger>
                     <ContextMenuContent>
-                      {hasPermission('upload') && (
+                      {hasPermission('rename') && (
                         <ContextMenuItem onClick={() => handleRenameFolder(file.name)}>
                           <Edit className="w-4 h-4 mr-2" />
                           Rename
@@ -378,7 +505,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
                 ) : (
                   <div
                     className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => handleFileClick(file)}
+                    onClick={() => handleItemClick(file)}
                   >
                     <div className="flex items-center space-x-3">
                       <FileText className="w-5 h-5 text-red-600" />
