@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, Folder, FileText, Search, ArrowLeft, Trash2, Download, Edit } from 'lucide-react';
+import { Upload, Folder, FileText, Search, ArrowLeft, Trash2, Download, Edit, RotateCw } from 'lucide-react';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useUser } from '@/contexts/UserContext';
 import { FileItem } from './Dashboard';
@@ -26,6 +26,12 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const folderActionsRef = useRef<FolderActionsRef>(null);
   const isDriveReadonly = !!rootFolders;
+
+  const [folderNameCache, setFolderNameCache] = useState<Record<string, string>>({});
+  const [loadingFolderNames, setLoadingFolderNames] = useState<Record<string, boolean>>({});
+
+  const [searchResults, setSearchResults] = useState<FileItem[] | null>(null);
+  const [loadingSearch, setLoadingSearch] = useState(false);
 
   const fetchFilesLocal = useCallback(async (folderIdToFetch: string, token: string) => {
     console.log('Fetching files from Google Drive...', { folderId: folderIdToFetch });
@@ -78,28 +84,124 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     }
   }, [toast]);
 
-  useEffect(() => {
-    console.log('FileBrowser useEffect triggered', { currentPath, hasRootFolders: !!rootFolders, hasAccessToken: !!accessToken });
-
-    if (currentPath.length === 0 && rootFolders) {
-      console.log('Setting files to rootFolders');
-      setFiles(rootFolders);
-    } else if (currentPath.length > 0 && accessToken) {
-      const folderIdToFetch = currentPath[currentPath.length - 1];
-      console.log('Attempting to fetch files for subfolder:', folderIdToFetch);
-      fetchFilesLocal(folderIdToFetch, accessToken);
-    } else {
-      console.log('Not at root with rootFolders or in subfolder with accessToken, clearing files');
-      setFiles([]);
+  const fetchAndCacheFolderName = useCallback(async (folderId: string, token: string) => {
+    if (folderNameCache[folderId] || loadingFolderNames[folderId]) {
+      return folderNameCache[folderId] || folderId;
     }
-  }, [currentPath, refreshTrigger, rootFolders, accessToken, fetchFilesLocal]);
+    if (!token) return folderId;
 
-  const filteredFiles = files.filter(file =>
-    file.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    setLoadingFolderNames(prev => ({ ...prev, [folderId]: true }));
+
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${folderId}?fields=name&access_token=${token}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setFolderNameCache(prev => ({ ...prev, [folderId]: data.name }));
+        setLoadingFolderNames(prev => ({ ...prev, [folderId]: false }));
+        return data.name;
+      }
+    } catch (error) {
+      console.error(`Error fetching name for folder ${folderId}:`, error);
+      setLoadingFolderNames(prev => ({ ...prev, [folderId]: false }));
+    }
+    setLoadingFolderNames(prev => ({ ...prev, [folderId]: false }));
+    return folderId;
+  }, [folderNameCache, loadingFolderNames, accessToken]);
+
+  const searchGoogleDrive = useCallback(async (query: string, token: string) => {
+    console.log('Searching Google Drive...', { query });
+    setLoadingSearch(true);
+    setSearchResults(null);
+
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=name+contains+'${query}'+and+trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink)&access_token=${token}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error('Google Drive API error during searchGoogleDrive:', response.status, errorData);
+        throw new Error(`Google Drive API error: ${errorData.error?.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (!data.files || !Array.isArray(data.files)) {
+        console.log('No files found or invalid response structure in searchGoogleDrive.');
+        setSearchResults([]);
+      } else {
+        console.log('Search results fetched successfully:', data.files.length);
+        interface GoogleDriveFileItem {
+          id: string;
+          name: string;
+          mimeType: string;
+          size?: string;
+          modifiedTime?: string;
+          webViewLink?: string;
+        }
+        const items = (data.files as GoogleDriveFileItem[]).map((item) => ({
+          id: item.id,
+          name: item.name,
+          type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' as 'folder' | 'file',
+          path: [], // path is managed at the Dashboard level
+          url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
+          size: item.size,
+          lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
+        }));
+        setSearchResults(items);
+      }
+    } catch (error) {
+      console.error('Error searching Google Drive:', error);
+      setSearchResults([]);
+      toast({
+        title: "เกิดข้อผิดพลาดในการค้นหา",
+        description: `ไม่สามารถค้นหาใน Google Drive ได้: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingSearch(false);
+    }
+  }, [accessToken, toast]);
+
+  useEffect(() => {
+    console.log('FileBrowser useEffect triggered', { currentPath, refreshTrigger, searchQuery, hasRootFolders: !!rootFolders, hasAccessToken: !!accessToken });
+
+    if (searchQuery === '') {
+      setSearchResults(null);
+      if (currentPath.length === 0 && rootFolders) {
+        console.log('Setting files to rootFolders');
+        setFiles(rootFolders);
+      } else if (currentPath.length > 0 && accessToken) {
+        const folderIdToFetch = currentPath[currentPath.length - 1];
+        console.log('Attempting to fetch files for subfolder:', folderIdToFetch);
+        fetchFilesLocal(folderIdToFetch, accessToken);
+      } else {
+        console.log('Not at root with rootFolders or in subfolder with accessToken, clearing files');
+        setFiles([]);
+      }
+    } else {
+      if (accessToken) {
+        searchGoogleDrive(searchQuery, accessToken);
+      } else {
+        console.log('No access token for search');
+        setSearchResults([]);
+      }
+    }
+
+  }, [currentPath, refreshTrigger, searchQuery, rootFolders, accessToken, fetchFilesLocal, searchGoogleDrive]);
+
+  const filteredFiles = files;
 
   const handleRefresh = () => {
-    setRefreshTrigger(prev => prev + 1);
+    console.log('handleRefresh called');
+    setRefreshTrigger(prev => {
+      console.log('refreshTrigger changed from', prev, 'to', prev + 1);
+      return prev + 1;
+    });
   };
 
   const getParentIdForNewFolder = (): string | undefined => {
@@ -266,28 +368,9 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     }
   };
 
-  // ปรับปรุงฟังก์ชัน getFolderName อีกครั้ง
   const getFolderName = (folderId: string): string => {
-    // ตรวจสอบใน rootFolders เสมอ เพราะ rootFolders ควรมีข้อมูลของโฟลเดอร์ระดับบนทั้งหมด
-    const rootFolder = rootFolders?.find(f => f.id === folderId);
-    if (rootFolder) {
-      return rootFolder.name;
-    }
-    // หากไม่เจอใน rootFolders (อาจเป็นโฟลเดอร์ที่สร้างขึ้นใหม่ใน subfolder)
-    // ให้ค้นหาในรายการ files ที่แสดงอยู่ในปัจจุบัน
-    const currentFolder = files.find(f => f.id === folderId);
-     if (currentFolder) {
-       return currentFolder.name;
-     }
-    // หากยังไม่เจอ (อาจเป็นโฟลเดอร์แม่ที่ไม่ได้อยู่ใน files ปัจจุบัน)
-    // เราไม่มีข้อมูลชื่อของโฟลเดอร์แม่ที่ลึกๆ นอกเหนือจากที่ fetch มาใน rootFolders หรือ files ปัจจุบัน
-    // ในสถานการณ์นี้ เราจำเป็นต้องมีวิธีเก็บชื่อโฟลเดอร์ที่เข้าชมไว้
-    // หรือ fetch ข้อมูลชื่อของโฟลเดอร์นั้นๆ โดยเฉพาะ
-    // แต่เพื่อแก้ไขปัญหาเบื้องต้นตามภาพ ให้แสดง ID ไปก่อนถ้าหาชื่อไม่ได้จริงๆ
-    console.warn(`getFolderName: Could not find name for folder ID ${folderId}. Displaying ID.`);
-    return folderId;
+    return folderNameCache[folderId] || (loadingFolderNames[folderId] ? 'Loading...' : folderId);
   };
-
 
   const handleItemClick = (item: FileItem) => {
     if (item.type === 'folder') {
@@ -307,18 +390,82 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       });
       return;
     }
-    
+
+    if (!accessToken) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่พบ Access Token กรุณาเข้าสู่ระบบใหม่",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const parentId = currentPath.length === 0 ? getParentIdForNewFolder() : currentPath[currentPath.length - 1];
+
+    if (!parentId) {
+        toast({
+            title: "เกิดข้อผิดพลาด",
+            description: "ไม่สามารถระบุโฟลเดอร์ปลายทางสำหรับการอัปโหลดได้",
+            variant: "destructive",
+        });
+        console.error('handleUpload: Failed to determine parentId.', { currentPath });
+        return;
+    }
+
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.pdf';
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
-        // TODO: Implement actual Google Drive upload logic
-        toast({
-          title: "Upload Successful",
-          description: `${file.name} has been uploaded.`,
-        });
+        console.log('Selected file for upload:', file);
+
+        const metadata = {
+          name: file.name,
+          parents: [parentId],
+        };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', file);
+
+        try {
+          const response = await fetch(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+              },
+              body: form,
+            }
+          );
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            console.error('Google Drive API error during file upload:', response.status, errorData);
+            const errorMessage = errorData?.error?.message || response.statusText || "Unknown error";
+            throw new Error(`เกิดข้อผิดพลาดในการอัปโหลดไฟล์: ${errorMessage}`);
+          }
+
+          const result = await response.json();
+          console.log('File uploaded successfully:', result);
+
+          toast({
+            title: "อัปโหลดสำเร็จ",
+            description: `${file.name} อัปโหลดขึ้น Google Drive เรียบร้อยแล้ว`,
+          });
+
+          handleRefresh();
+
+        } catch (error) {
+          console.error('Error during file upload:', error);
+          toast({
+            title: "เกิดข้อผิดพลาด",
+            description: error instanceof Error ? error.message : "ไม่สามารถอัปโหลดไฟล์ขึ้น Google Drive ได้",
+            variant: "destructive",
+          });
+        }
       }
     };
     input.click();
@@ -343,19 +490,51 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   };
 
   const handleDownload = (file: FileItem) => {
-     if (file.url) {
-       window.open(file.url, '_blank');
-       toast({
-         title: "Download Started",
-         description: `Downloading ${file.name}...`,
-       });
-     } else {
-       toast({
-         title: "Download Failed",
-         description: `Cannot download ${file.name}. URL not available.`,
-         variant: "destructive",
-       });
-     }
+    // ตรวจสอบ accessToken
+    if (!accessToken) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่พบ Access Token กรุณาเข้าสู่ระบบใหม่",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // สร้างลิงก์ดาวน์โหลดโดยตรงจาก Google Drive API
+    const downloadUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+
+    // เปิดลิงก์ดาวน์โหลดในแท็บใหม่
+    window.open(downloadUrl, '_blank');
+
+    toast({
+      title: "กำลังเริ่มดาวน์โหลด",
+      description: `กำลังดาวน์โหลด ${file.name}...`,
+    });
+  };
+
+  const handleView = (file: FileItem) => {
+    if (!hasPermission('view')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to view files.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.url) {
+      window.open(file.url, '_blank');
+      toast({
+        title: "เปิดไฟล์",
+        description: `เปิด ${file.name} ในแท็บใหม่`,
+      });
+    } else {
+      toast({
+        title: "ไม่สามารถเปิดไฟล์ได้",
+        description: `ไม่มีลิงก์สำหรับเปิด ${file.name}`,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRenameFolder = (folderName: string) => {
@@ -415,6 +594,9 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
                 Upload
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              <RotateCw className="w-4 h-4" />
+            </Button>
             {currentPath.length > 0 && (
               <Button
                 variant="outline"
@@ -430,7 +612,6 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         
         {/* Breadcrumb */}
         <div className="flex items-center space-x-2 text-sm text-gray-500">
-          {/* เปลี่ยน Home เป็น Faculties */}
           <span
             className="cursor-pointer hover:text-blue-600"
             onClick={() => onPathChange([])}
@@ -444,7 +625,6 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
                 className="cursor-pointer hover:text-blue-600"
                 onClick={() => onPathChange(currentPath.slice(0, index + 1))}
               >
-                {/* ใช้ getFolderName เพื่อแสดงชื่อโฟลเดอร์ */}
                 {getFolderName(folderId)}
               </span>
             </div>
@@ -463,90 +643,109 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       </CardHeader>
       
       <CardContent>
-        <div className="space-y-2">
-          {filteredFiles.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Folder className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>No files found</p>
-            </div>
-          ) : (
-            filteredFiles.map((file) => (
-              <div key={file.id}>
-                {file.type === 'folder' ? (
-                  <ContextMenu>
-                    <ContextMenuTrigger asChild>
-                      <div
-                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => handleItemClick(file)}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <Folder className="w-5 h-5 text-blue-600" />
-                          <div>
-                            <p className="font-medium text-gray-900">{file.name}</p>
+        {loadingSearch ? (
+          <div className="text-center py-8 text-gray-500">
+            <RotateCw className="w-12 h-12 mx-auto mb-2 opacity-50 animate-spin" />
+            <p>กำลังค้นหา...</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {(searchQuery !== '' ? searchResults : filteredFiles)?.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Folder className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>{searchQuery !== '' ? 'ไม่พบผลลัพธ์การค้นหา' : 'No files found'}</p>
+              </div>
+            ) : (
+              (searchQuery !== '' ? searchResults : filteredFiles)?.map((file) => (
+                <div key={file.id}>
+                  {file.type === 'folder' ? (
+                    <ContextMenu>
+                      <ContextMenuTrigger asChild>
+                        <div
+                          className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
+                          onClick={() => handleItemClick(file)}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <Folder className="w-5 h-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium text-gray-900">{file.name}</p>
+                            </div>
                           </div>
                         </div>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        {hasPermission('upload') && (
+                          <ContextMenuItem onClick={() => handleRenameFolder(file.name)}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Rename
+                          </ContextMenuItem>
+                        )}
+                        {hasPermission('delete') && (
+                          <ContextMenuItem onClick={() => handleDeleteFolder(file.name)}>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </ContextMenuItem>
+                        )}
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  ) : (
+                    <div
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => handleItemClick(file)}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <FileText className="w-5 h-5 text-red-600" />
+                        <div>
+                          <p className="font-medium text-gray-900">{file.name}</p>
+                          <p className="text-sm text-gray-500">
+                            {file.size} • Modified {file.lastModified}
+                          </p>
+                        </div>
                       </div>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      {hasPermission('rename') && (
-                        <ContextMenuItem onClick={() => handleRenameFolder(file.name)}>
-                          <Edit className="w-4 h-4 mr-2" />
-                          Rename
-                        </ContextMenuItem>
-                      )}
-                      {hasPermission('delete') && (
-                        <ContextMenuItem onClick={() => handleDeleteFolder(file.name)}>
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </ContextMenuItem>
-                      )}
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ) : (
-                  <div
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => handleItemClick(file)}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <FileText className="w-5 h-5 text-red-600" />
-                      <div>
-                        <p className="font-medium text-gray-900">{file.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {file.size} • Modified {file.lastModified}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDownload(file);
-                        }}
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                      {hasPermission('delete') && (
+                      
+                      <div className="flex items-center space-x-1">
+                        {hasPermission('view') && file.url && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleView(file);
+                            }}
+                          >
+                            <FileText className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDelete(file);
+                            handleDownload(file);
                           }}
                         >
-                          <Trash2 className="w-4 h-4 text-red-500" />
+                          <Download className="w-4 h-4" />
                         </Button>
-                      )}
+                        {hasPermission('delete') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(file);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
