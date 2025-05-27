@@ -46,7 +46,7 @@ const AppContent = () => {
   if (isAuthenticated && user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <Dashboard onAdminLogin={() => { /* จะส่ง handleGoogleLogin จาก Dashboard ขึ้นมาที่นี่ */ }} />
+        <Dashboard />
       </div>
     );
   }
