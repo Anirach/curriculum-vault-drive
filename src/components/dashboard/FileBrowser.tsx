@@ -302,7 +302,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   }, [currentPath, refreshTrigger, searchQuery, rootFolders, accessToken, fetchFolderContents, searchGoogleDrive, driveUrl, files, setFiles, setSearchResults]); // เพิ่ม dependencies ที่ขาดหายไป
 
   // Determine files to display based on search state and current path
-  const displayedFiles = searchQuery !== '' ? searchResults : (
+  const filesToDisplay = searchQuery !== '' ? searchResults : (
     (() => {
       // Determine the current folder ID
       const match = driveUrl?.match(/folders\/([a-zA-Z0-9_-]+)/);
@@ -330,6 +330,20 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       });
     })()
   );
+
+  // Sort the files: folders first, then files, both by name ascending
+  const displayedFiles = [...(filesToDisplay || [])].sort((a, b) => {
+    // Folders come before files
+    if (a.type === 'folder' && b.type !== 'folder') {
+      return -1; // a (folder) comes before b (file)
+    }
+    if (a.type !== 'folder' && b.type === 'folder') {
+      return 1;  // b (folder) comes before a (file)
+    }
+
+    // If both are folders or both are files, sort by name alphabetically
+    return a.name.localeCompare(b.name);
+  });
 
   const handleRefresh = () => {
     console.log('handleRefresh called');
