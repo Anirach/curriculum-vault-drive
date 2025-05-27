@@ -95,7 +95,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     try {
       const response = await fetch(
         `https://www.googleapis.com/drive/v3/files/${folderId}?fields=name&access_token=${token}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (response.ok) {
@@ -110,7 +110,21 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     }
     setLoadingFolderNames(prev => ({ ...prev, [folderId]: false }));
     return folderId;
-  }, [folderNameCache, loadingFolderNames, accessToken]);
+  }, [folderNameCache, loadingFolderNames]);
+
+  useEffect(() => {
+    const fetchFolderNames = async () => {
+      if (!accessToken || currentPath.length === 0) return;
+      
+      for (const folderId of currentPath) {
+        if (!folderNameCache[folderId] && !loadingFolderNames[folderId]) {
+          await fetchAndCacheFolderName(folderId, accessToken);
+        }
+      }
+    };
+
+    fetchFolderNames();
+  }, [currentPath, accessToken, folderNameCache, loadingFolderNames, fetchAndCacheFolderName]);
 
   const searchGoogleDrive = useCallback(async (query: string, token: string) => {
     console.log('Searching Google Drive...', { query });
