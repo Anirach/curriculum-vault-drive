@@ -3,12 +3,25 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { GraduationCap, FileText, Shield, Users, ArrowRight } from 'lucide-react';
+import { useAuthActions } from '@/contexts/AuthActionsContext';
 
 interface LandingPageProps {
   onLoginClick: () => void;
 }
 
 export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
+  const { handleGoogleLogin } = useAuthActions();
+
+  const handleLoginClick = async () => {
+    try {
+      await handleGoogleLogin();
+    } catch (error) {
+      console.error('Google login failed:', error);
+      // Fallback to regular login form if Google login fails
+      onLoginClick();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Hero Section */}
@@ -25,10 +38,10 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
             เพื่อการเข้าถึงและจัดการไฟล์ที่มีประสิทธิภาพ
           </p>
           <Button 
-            onClick={onLoginClick}
+            onClick={handleLoginClick}
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 text-lg rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
           >
-            เข้าสู่ระบบ
+            เข้าสู่ระบบด้วย Google
             <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
         </div>
