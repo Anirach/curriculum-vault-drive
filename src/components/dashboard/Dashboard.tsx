@@ -19,9 +19,11 @@ export interface FileItem {
   type: 'folder' | 'file';
   path: string[];
   url?: string;
+  downloadUrl?: string;
   size?: string;
   lastModified?: string;
   parents?: string[];
+  mimeType?: string;
 }
 
 export interface GoogleDriveFile {
@@ -30,6 +32,7 @@ export interface GoogleDriveFile {
   mimeType: string;
   parents?: string[];
   webViewLink?: string;
+  webContentLink?: string;
   size?: string;
   modifiedTime?: string;
 }
@@ -514,9 +517,11 @@ export const Dashboard = () => {
         type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file',
         path: [],
         url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
+        downloadUrl: item.webContentLink,
         size: item.size,
         lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
         parents: item.parents,
+        mimeType: item.mimeType,
       }));
       setRootFolders(items);
     } catch (error) {

@@ -43,7 +43,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     try {
       do {
         const response = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken, files(id,name,mimeType,size,modifiedTime,parents,webViewLink)&access_token=${token}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? '&pageToken=' + pageToken : ''}`,
+          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken, files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)&access_token=${token}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? '&pageToken=' + pageToken : ''}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
@@ -60,10 +60,12 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
             name: item.name,
             type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file',
             path: [], // path is managed at the Dashboard level
-            url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
+            url: item.webViewLink,
+            downloadUrl: item.webContentLink, // ใช้ webContentLink สำหรับ downloadUrl
             size: item.size,
             lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
             parents: item.parents,
+            mimeType: item.mimeType, // เพิ่ม mimeType เพื่อใช้ในการตรวจสอบประเภทไฟล์
           }));
           currentFolderItems = [...currentFolderItems, ...items];
           pageToken = data.nextPageToken || null;
@@ -106,7 +108,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     try {
       do {
         const response = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken, files(id,name,mimeType,size,modifiedTime,parents,webViewLink)&access_token=${token}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? '&pageToken=' + pageToken : ''}`,
+          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken, files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)&access_token=${token}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? '&pageToken=' + pageToken : ''}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
@@ -123,10 +125,12 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
             name: item.name,
             type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file',
             path: [], // path is managed at the Dashboard level
-            url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
+            url: item.webViewLink,
+            downloadUrl: item.webContentLink, // ใช้ webContentLink สำหรับ downloadUrl
             size: item.size,
             lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
             parents: item.parents,
+            mimeType: item.mimeType, // เพิ่ม mimeType เพื่อใช้ในการตรวจสอบประเภทไฟล์
           }));
           allFiles = [...allFiles, ...items];
           pageToken = data.nextPageToken || null;
@@ -503,14 +507,71 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     return folderNameCache[folderId] || (loadingFolderNames[folderId] ? 'Loading...' : folderId);
   };
 
-  const handleItemClick = (item: FileItem) => {
+  const handleItemClick = useCallback(async (item: FileItem) => {
     if (item.type === 'folder') {
       const newPath = [...currentPath, item.id];
       onPathChange(newPath);
     } else {
-      onFileSelect(item);
+      console.log('File clicked, attempting to fetch content...', item);
+      if (!accessToken) {
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: "ไม่พบ Access Token ไม่สามารถเปิดไฟล์ได้",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        let fileContentUrl: string;
+
+        // สำหรับ Google Native files (Docs, Sheets, etc.) ที่แปลงเป็น PDF
+        if (item.mimeType && item.mimeType.startsWith('application/vnd.google-apps.')) {
+          // ใช้ export endpoint สำหรับ Google Docs
+          fileContentUrl = `https://www.googleapis.com/drive/v3/files/${item.id}/export?mimeType=application/pdf`;
+        } else {
+          // ใช้ alt=media endpoint สำหรับไฟล์ทั่วไป
+          fileContentUrl = `https://www.googleapis.com/drive/v3/files/${item.id}?alt=media`;
+        }
+
+        console.log('Fetching file content from:', fileContentUrl);
+
+        // ดึงเนื้อหาไฟล์โดยตรงจาก Google Drive API
+        const response = await fetch(fileContentUrl, {
+          headers: { 
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/pdf' // ระบุว่าเราต้องการ PDF
+          }
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error fetching file content:', response.status, errorText);
+          toast({
+            title: "เกิดข้อผิดพลาดในการเปิดไฟล์",
+            description: `ไม่สามารถดึงเนื้อหาไฟล์ได้: ${response.statusText || response.status}`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // รับเนื้อหาไฟล์เป็น Blob
+        const fileBlob = await response.blob();
+        const blobUrl = URL.createObjectURL(fileBlob);
+
+        // ส่ง Blob URL และข้อมูล FileItem ไปให้ Dashboard/PDFViewer
+        onFileSelect({...item, url: blobUrl});
+
+      } catch (error) {
+        console.error('Error in handleItemClick fetching file content:', error);
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: `ไม่สามารถเปิดไฟล์ได้: ${error instanceof Error ? error.message : String(error)}`,
+          variant: "destructive",
+        });
+      }
     }
-  };
+  }, [currentPath, onPathChange, onFileSelect, accessToken, toast]);
 
   const handleUpload = () => {
     if (!hasPermission('upload')) {
@@ -644,28 +705,33 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   };
 
   const handleView = (file: FileItem) => {
-    if (!hasPermission('view')) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have permission to view files.",
-        variant: "destructive",
-      });
-      return;
-    }
+    // handleView นี้อาจจะไม่จำเป็นต้องใช้แล้ว ถ้า handleItemClick จัดการการเปิดไฟล์ทั้งหมด
+    console.log('handleView called, likely not needed anymore.', file);
+     if (!hasPermission('view')) {
+       toast({
+         title: "Access Denied",
+         description: "You don't have permission to view files.",
+         variant: "destructive",
+       });
+       return;
+     }
+    // หากยังต้องการให้ handleView ทำงาน (เช่น จาก Context Menu)
+    // สามารถปรับให้ใช้ file.downloadUrl หรือ file.url ได้
+    const linkToOpen = file.downloadUrl || file.url;
+    if (linkToOpen) {
+         window.open(linkToOpen, '_blank');
+         toast({
+           title: "เปิดไฟล์",
+           description: `เปิด ${file.name} ในแท็บใหม่`, // อาจจะปรับข้อความถ้าเปิด direct link
+         });
+     } else {
+          toast({
+            title: "ไม่สามารถเปิดไฟล์ได้",
+            description: `ไม่มีลิงก์สำหรับเปิด ${file.name}`, // หรือไม่มีลิงก์ที่เหมาะสม
+            variant: "destructive",
+          });
+     }
 
-    if (file.url) {
-      window.open(file.url, '_blank');
-      toast({
-        title: "เปิดไฟล์",
-        description: `เปิด ${file.name} ในแท็บใหม่`,
-      });
-    } else {
-      toast({
-        title: "ไม่สามารถเปิดไฟล์ได้",
-        description: `ไม่มีลิงก์สำหรับเปิด ${file.name}`,
-        variant: "destructive",
-      });
-    }
   };
 
   const handleRenameFolder = (folderName: string) => {
