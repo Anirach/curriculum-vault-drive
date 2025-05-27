@@ -477,6 +477,52 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     }
   };
 
+  // เพิ่มฟังก์ชันสำหรับเปลี่ยนชื่อไฟล์
+  const renameFile = async (fileId: string, newName: string) => {
+    if (!accessToken) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่พบ Access Token กรุณาเข้าสู่ระบบใหม่",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newName.trim()
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.error?.message || response.statusText || "Unknown error";
+        throw new Error(`เกิดข้อผิดพลาดในการเปลี่ยนชื่อไฟล์: ${errorMessage}`);
+      }
+
+      toast({
+        title: "เปลี่ยนชื่อไฟล์สำเร็จ",
+        description: `เปลี่ยนชื่อไฟล์เป็น "${newName}" เรียบร้อยแล้ว`,
+      });
+
+      handleRefresh(); // รีเฟรชรายการหลังจากเปลี่ยนชื่อ
+    } catch (error) {
+      console.error('Error renaming file:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: error instanceof Error ? error.message : "ไม่สามารถเปลี่ยนชื่อไฟล์ได้",
+        variant: "destructive",
+      });
+      throw error; // Rethrow to propagate error
+    }
+  };
+
   const deleteFolder = async (folderId: string) => {
     if (!accessToken) {
       toast({
@@ -864,6 +910,29 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
     await deleteFolder(folderToDelete.id);
     handleRefresh();
+  };
+
+  // เพิ่มฟังก์ชันสำหรับจัดการการเปลี่ยนชื่อไฟล์ (เปิด prompt)
+  const handleRenameFile = (file: FileItem) => {
+      if (!hasPermission('rename')) { // Assuming 'rename' permission exists
+          toast({
+              title: "ไม่มีสิทธิ์",
+              description: "คุณไม่มีสิทธิ์ในการเปลี่ยนชื่อไฟล์",
+              variant: "destructive",
+          });
+          return;
+      }
+
+      const newName = window.prompt(`เปลี่ยนชื่อไฟล์ "${file.name}" เป็น:`, file.name);
+      if (newName !== null && newName.trim() !== '' && newName.trim() !== file.name) {
+          renameFile(file.id, newName.trim());
+      } else if (newName !== null && newName.trim() === '') {
+           toast({
+              title: "ข้อผิดพลาด",
+              description: "ชื่อไฟล์ใหม่ต้องไม่ว่างเปล่า",
+              variant: "destructive",
+          });
+      }
   };
 
   return (

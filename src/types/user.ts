@@ -26,6 +26,7 @@ export interface UserPermission {
     view: boolean;
     upload: boolean;
     delete: boolean;
+    rename: boolean;
   };
 }
 
@@ -36,6 +37,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, UserPermission> = {
       view: true,
       upload: true,
       delete: true,
+      rename: true,
     },
   },
   Viewer: {
@@ -44,6 +46,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, UserPermission> = {
       view: true,
       upload: false,
       delete: false,
+      rename: false,
     },
   },
 }; 
