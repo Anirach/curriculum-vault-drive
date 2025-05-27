@@ -5,7 +5,7 @@ import { userService } from '@/services/userService';
 interface UserContextType {
   user: User | null;
   setUser: (user: User | null) => void;
-  hasPermission: (action: 'upload' | 'delete' | 'view') => boolean;
+  hasPermission: (action: 'upload' | 'delete' | 'view' | 'rename') => boolean;
   isLoading: boolean;
   error: string | null;
 }

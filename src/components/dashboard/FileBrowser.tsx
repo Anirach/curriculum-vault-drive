@@ -1057,57 +1057,100 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
                       </ContextMenuContent>
                     </ContextMenu>
                   ) : (
-                    <div
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => handleItemClick(file)}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <FileText className="w-5 h-5 text-red-600" />
-                        <div>
-                          <p className="font-medium text-gray-900">{file.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {file.size} • Modified {file.lastModified}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-1">
-                        {hasPermission('view') && file.url && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleView(file);
-                            }}
-                          >
-                            <FileText className="w-4 h-4" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownload(file);
-                          }}
+                    <ContextMenu>
+                      <ContextMenuTrigger asChild>
+                        <div
+                          className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
+                          onClick={() => handleItemClick(file)}
                         >
-                          <Download className="w-4 h-4" />
-                        </Button>
-                        {hasPermission('delete') && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(file);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
+                          <div className="flex items-center space-x-3">
+                            <FileText className="w-5 h-5 text-red-600" />
+                            <div>
+                              <p className="font-medium text-gray-900">{file.name}</p>
+                              <p className="text-sm text-gray-500">
+                                {file.size} • Modified {file.lastModified}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* ไอคอน View, Download, Delete กลับมาแสดงตรงนี้ */}
+                          <div className="flex items-center space-x-1">
+                            {hasPermission('view') && file.url && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleView(file);
+                                }}
+                              >
+                                <FileText className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownload(file);
+                              }}
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                            {hasPermission('rename') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRenameFile(file);
+                                }}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {hasPermission('delete') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(file);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            )}
+                          </div>
+
+                        </div>
+                      </ContextMenuTrigger>
+
+                      <ContextMenuContent>
+                        {hasPermission('rename') && (
+                          <ContextMenuItem onClick={() => handleRenameFile(file)}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Rename
+                          </ContextMenuItem>
                         )}
-                      </div>
-                    </div>
+                        {hasPermission('delete') && (
+                          <ContextMenuItem onClick={() => handleDelete(file)}>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </ContextMenuItem>
+                        )}
+                        {hasPermission('view') && file.url && (
+                          <ContextMenuItem onClick={() => handleView(file)}>
+                            <FileText className="w-4 h-4 mr-2" />
+                            View
+                          </ContextMenuItem>
+                        )}
+                        <ContextMenuItem onClick={() => handleDownload(file)}>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
                   )}
                 </div>
               ))
