@@ -535,6 +535,42 @@ export const Dashboard = () => {
     }
   }, [driveUrl, accessToken, refreshToken, toast, handleTokenExpired, refreshAccessToken]);
 
+  const handleConnectGoogleDrive = useCallback(async () => {
+    try {
+      const settings = await userService.getGoogleDriveSettings();
+      if (!settings || !settings.clientId || !settings.clientSecret) {
+        if (user && user.role === 'Admin') {
+          toast({
+            title: "กรุณาตั้งค่า Google Drive",
+            description: "กรุณากรอก Google OAuth Client ID และ Client Secret",
+            variant: "destructive",
+          });
+          setShowConfig(true);
+        } else {
+          toast({
+            title: "ไม่สามารถเชื่อมต่อ Google Drive",
+            description: "กรุณาติดต่อผู้ดูแลระบบเพื่อตั้งค่า Google Drive",
+            variant: "destructive",
+          });
+        }
+        return;
+      }
+
+      const redirectUri = window.location.origin;
+      const scope = 'https://www.googleapis.com/auth/drive';
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
+
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error('Error connecting to Google Drive:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถเชื่อมต่อ Google Drive ได้ กรุณาลองใหม่อีกครั้ง",
+        variant: "destructive",
+      });
+    }
+  }, [user, toast]);
+
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -713,17 +749,21 @@ export const Dashboard = () => {
   return (
     <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
       <div className="min-h-screen bg-gray-50">
-        <Header onConfigDrive={() => {
-          if (user.role === 'Admin') {
-            setShowConfig(true);
-          } else {
-            toast({
-              title: "ไม่มีสิทธิ์",
-              description: "เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถตั้งค่าได้",
-              variant: "destructive",
-            });
-          }
-        }} />
+        <Header 
+          onConfigDrive={() => {
+            if (user.role === 'Admin') {
+              setShowConfig(true);
+            } else {
+              toast({
+                title: "ไม่มีสิทธิ์",
+                description: "เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถตั้งค่าได้",
+                variant: "destructive",
+              });
+            }
+          }}
+          onConnectDrive={handleConnectGoogleDrive}
+          accessToken={accessToken}
+        />
         <Dialog open={showConfig} onOpenChange={setShowConfig}>
           <DialogContent aria-describedby="dialog-description">
             <DialogHeader>

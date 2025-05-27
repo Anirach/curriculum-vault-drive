@@ -4,6 +4,13 @@ import { User, Invitation, UserRole } from '@/types/user';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
+// Google OAuth settings
+const DEFAULT_GOOGLE_OAUTH_SETTINGS = {
+  clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+  clientSecret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
+  driveUrl: import.meta.env.VITE_GOOGLE_DRIVE_URL || ''
+};
+
 export const userService = {
   // User management (ปรับให้จัดการด้วย localStorage หรือ logic ภายใน)
   async login(email: string): Promise<User | null> {
@@ -67,12 +74,19 @@ export const userService = {
     return null; // หรือจะ throw error ก็ได้
   },
 
-  // Google Drive settings (ปรับให้จัดการด้วย localStorage หรือ logic ภายใน)
+  // Google Drive settings
   async getGoogleDriveSettings() {
-    // ดึงการตั้งค่าจาก localStorage
-    const clientId = localStorage.getItem('clientId');
-    const clientSecret = localStorage.getItem('clientSecret');
-    const driveUrl = localStorage.getItem('driveUrl');
+    // ดึงการตั้งค่าจาก localStorage หรือใช้ค่าเริ่มต้น
+    const clientId = localStorage.getItem('clientId') || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientId;
+    const clientSecret = localStorage.getItem('clientSecret') || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientSecret;
+    const driveUrl = localStorage.getItem('driveUrl') || DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl;
+
+    // ถ้าไม่มีค่าใดๆ เลย แสดงว่ายังไม่ได้ตั้งค่า
+    if (!clientId || !clientSecret) {
+      console.warn('Google OAuth settings not found');
+      return null;
+    }
+
     return {
       clientId,
       clientSecret,
