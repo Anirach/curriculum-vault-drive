@@ -218,7 +218,10 @@ export const Dashboard = () => {
         return;
       }
 
-      const redirectUri = window.location.origin;
+      // บันทึก path ปัจจุบันก่อน redirect
+      localStorage.setItem('returnPath', window.location.pathname);
+
+      const redirectUri = `${window.location.origin}/auth/callback`;
       const scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
 
@@ -556,9 +559,12 @@ export const Dashboard = () => {
         return;
       }
 
-      const redirectUri = window.location.origin;
+      // บันทึก path ปัจจุบันก่อน redirect
+      localStorage.setItem('returnPath', window.location.pathname);
+
+      const redirectUri = `${window.location.origin}/auth/callback`;
       const scope = 'https://www.googleapis.com/auth/drive';
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify({ type: 'drive' }))}`;
 
       window.location.href = authUrl;
     } catch (error) {

@@ -1,46 +1,38 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserRole, ROLE_PERMISSIONS } from '@/types/user';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { UserRole, ROLE_PERMISSIONS } from '@/types/user';
 import { userService } from '@/services/userService';
+
+export interface User {
+  email: string;
+  name: string;
+  picture?: string;
+  role?: UserRole;
+}
 
 interface UserContextType {
   user: User | null;
   setUser: (user: User | null) => void;
-  hasPermission: (action: 'upload' | 'delete' | 'view' | 'rename') => boolean;
+  hasPermission: (permission: 'upload' | 'delete' | 'view' | 'rename') => boolean;
   isLoading: boolean;
   error: string | null;
+  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-export const UserProvider = ({ children }: { children: ReactNode }) => {
+export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const currentUser = await userService.getCurrentUser();
-        setUser(currentUser);
-      } catch (err) {
-        setError('Failed to load user data');
-        console.error('Error loading user:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadUser();
-  }, []);
-
-  const hasPermission = (action: 'upload' | 'delete' | 'view'): boolean => {
-    if (!user) return false;
+  const hasPermission = (permission: 'upload' | 'delete' | 'view' | 'rename'): boolean => {
+    if (!user?.role) return false;
     const rolePermissions = ROLE_PERMISSIONS[user.role];
-    return rolePermissions.permissions[action];
+    return rolePermissions?.permissions?.[permission] || false;
   };
 
   return (
-    <UserContext.Provider value={{ user, setUser, hasPermission, isLoading, error }}>
+    <UserContext.Provider value={{ user, setUser, hasPermission, isLoading, error, setIsLoading }}>
       {children}
     </UserContext.Provider>
   );

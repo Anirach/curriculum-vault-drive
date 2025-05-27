@@ -2,13 +2,16 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, Folder, FileText, Search, ArrowLeft, Trash2, Download, Edit, RotateCw } from 'lucide-react';
+import { Upload, Folder, FileText, Search, ArrowLeft, Trash2, Download, Edit, RotateCw, Share2, FolderUp, ChevronLeft } from 'lucide-react';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useUser } from '@/contexts/UserContext';
 import { FileItem, GoogleDriveFile } from './Dashboard';
 import { FolderActions, FolderActionsRef } from './FolderActions';
 import { toast } from '@/hooks/use-toast';
 import { UserRole } from '@/types/user';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
 interface FileBrowserProps {
   currentPath: string[];
@@ -18,6 +21,96 @@ interface FileBrowserProps {
   userRole?: UserRole;
   accessToken?: string;
 }
+
+interface ShareDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onShare: (email: string, role: 'reader' | 'writer') => Promise<void>;
+  folderName: string;
+}
+
+const ShareDialog: React.FC<ShareDialogProps> = ({ isOpen, onClose, onShare, folderName }) => {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'reader' | 'writer'>('reader');
+  const [isSharing, setIsSharing] = useState(false);
+  const { toast } = useToast();
+
+  const handleShare = async () => {
+    if (!email) {
+      toast({
+        title: "กรุณากรอกอีเมล",
+        description: "กรุณาระบุอีเมลของผู้ใช้ที่ต้องการแชร์",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsSharing(true);
+      await onShare(email, role);
+      toast({
+        title: "แชร์โฟลเดอร์สำเร็จ",
+        description: `แชร์โฟลเดอร์ "${folderName}" กับ ${email} แล้ว`,
+      });
+      onClose();
+    } catch (error) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถแชร์โฟลเดอร์ได้ กรุณาลองใหม่อีกครั้ง",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>แชร์โฟลเดอร์ "{folderName}"</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">อีเมลผู้ใช้</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="example@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>สิทธิ์การเข้าถึง</Label>
+            <div className="flex space-x-4">
+              <Button
+                variant={role === 'reader' ? 'default' : 'outline'}
+                onClick={() => setRole('reader')}
+                className="flex-1"
+              >
+                อ่านอย่างเดียว
+              </Button>
+              <Button
+                variant={role === 'writer' ? 'default' : 'outline'}
+                onClick={() => setRole('writer')}
+                className="flex-1"
+              >
+                แก้ไขได้
+              </Button>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>ยกเลิก</Button>
+          <Button onClick={handleShare} disabled={isSharing}>
+            {isSharing ? 'กำลังแชร์...' : 'แชร์'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolders, userRole, accessToken }: FileBrowserProps) => {
   const { hasPermission } = useUser();
@@ -34,6 +127,9 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   const [loadingSearch, setLoadingSearch] = useState(false);
 
   const driveUrl = localStorage.getItem('driveUrl');
+
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [selectedFolder, setSelectedFolder] = useState<FileItem | null>(null);
 
   const fetchFolderContents = useCallback(async (folderId: string, token: string, allItems: FileItem[] = []): Promise<FileItem[]> => {
     console.log('Fetching contents of folder...', { folderId });
@@ -155,195 +251,103 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     }
   }, [toast]);
 
-  // Use fetchFolderContents to populate files state
+  // แก้ไข useEffect สำหรับการโหลดไฟล์
   useEffect(() => {
     const loadFiles = async () => {
-      console.log('FileBrowser useEffect triggered for loading files', { currentPath, refreshTrigger, hasRootFolders: !!rootFolders, hasAccessToken: !!accessToken });
- 
-      if (!accessToken) {
-        console.log('No access token, clearing files.');
-        setFiles([]);
+      if (!accessToken || searchQuery !== '') {
         return;
       }
 
-      // Determine the target folder ID based on currentPath
       const match = driveUrl?.match(/folders\/([a-zA-Z0-9_-]+)/);
       const rootFolderId = match ? match[1] : null;
       const targetFolderId = currentPath.length > 0 ? currentPath[currentPath.length - 1] : rootFolderId;
 
       if (!targetFolderId) {
-        console.log('No target folder ID determined, clearing files.');
         setFiles([]);
         return;
       }
 
-      console.log('Loading files recursively from target folder:', targetFolderId);
       try {
-        // When at root, fetch only direct children and set as rootFolders
         if (currentPath.length === 0 && targetFolderId) {
-            console.log('Fetching direct children for root folder:', targetFolderId);
-            const directChildren = await fetchDirectChildren(targetFolderId, accessToken);
-            setFiles(directChildren); // Display direct children at root
-            // Optionally, you might want to store rootFolders separately if needed elsewhere
+          const directChildren = await fetchDirectChildren(targetFolderId, accessToken);
+          setFiles(directChildren);
+        } else if (currentPath.length > 0 && targetFolderId) {
+          const directChildren = await fetchDirectChildren(targetFolderId, accessToken);
+          setFiles(directChildren);
         }
-        // When in a subfolder, fetch only direct children
-        else if (currentPath.length > 0 && targetFolderId) {
-            console.log('Fetching direct children for subfolder:', targetFolderId);
-            const directChildren = await fetchDirectChildren(targetFolderId, accessToken);
-            setFiles(directChildren);
-        }
-        // Note: Recursive fetching (fetchFolderContents) is now only for search or other specific needs.
-
       } catch (error) {
-        console.error('Failed to load files recursively:', error);
+        console.error('Failed to load files:', error);
         setFiles([]);
       }
     };
 
-    if (searchQuery === '') { // Only load files recursively when not searching
-      loadFiles();
-    }
-  }, [currentPath, refreshTrigger, accessToken, rootFolders, driveUrl, fetchFolderContents, searchQuery, fetchDirectChildren, setFiles]); // เพิ่ม dependencies
+    loadFiles();
+  }, [currentPath, accessToken, driveUrl, searchQuery, fetchDirectChildren]); // ลบ files ออกจาก dependencies
 
-  const fetchAndCacheFolderName = useCallback(async (folderId: string, token: string) => {
-    if (folderNameCache[folderId] || loadingFolderNames[folderId]) {
-      return folderNameCache[folderId] || folderId;
-    }
-    if (!token) return folderId;
-
-    setLoadingFolderNames(prev => ({ ...prev, [folderId]: true }));
-
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${folderId}?fields=name&access_token=${token}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setFolderNameCache(prev => ({ ...prev, [folderId]: data.name }));
-        setLoadingFolderNames(prev => ({ ...prev, [folderId]: false }));
-        return data.name;
+  // แยก useEffect สำหรับการค้นหา
+  useEffect(() => {
+    const performSearch = async () => {
+      if (!searchQuery || !accessToken) {
+        setSearchResults(null);
+        return;
       }
-    } catch (error) {
-      console.error(`Error fetching name for folder ${folderId}:`, error);
-      setLoadingFolderNames(prev => ({ ...prev, [folderId]: false }));
-    }
-    setLoadingFolderNames(prev => ({ ...prev, [folderId]: false }));
-    return folderId;
-  }, [folderNameCache, loadingFolderNames]);
 
+      setLoadingSearch(true);
+      try {
+        const filteredResults = files.filter(item =>
+          item.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setSearchResults(filteredResults);
+      } catch (error) {
+        console.error('Search error:', error);
+        setSearchResults([]);
+      } finally {
+        setLoadingSearch(false);
+      }
+    };
+
+    performSearch();
+  }, [searchQuery, accessToken, files]);
+
+  // แยก useEffect สำหรับการโหลดชื่อโฟลเดอร์
   useEffect(() => {
     const fetchFolderNames = async () => {
       if (!accessToken || currentPath.length === 0) return;
       
+      const newFolderNames: Record<string, string> = {};
+      const newLoadingStates: Record<string, boolean> = {};
+      
       for (const folderId of currentPath) {
         if (!folderNameCache[folderId] && !loadingFolderNames[folderId]) {
-          await fetchAndCacheFolderName(folderId, accessToken);
+          newLoadingStates[folderId] = true;
+          try {
+            const response = await fetch(
+              `https://www.googleapis.com/drive/v3/files/${folderId}?fields=name&access_token=${accessToken}`,
+              { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+
+            if (response.ok) {
+              const data = await response.json();
+              newFolderNames[folderId] = data.name;
+            }
+          } catch (error) {
+            console.error(`Error fetching name for folder ${folderId}:`, error);
+          } finally {
+            newLoadingStates[folderId] = false;
+          }
         }
+      }
+
+      if (Object.keys(newFolderNames).length > 0) {
+        setFolderNameCache(prev => ({ ...prev, ...newFolderNames }));
+      }
+      if (Object.keys(newLoadingStates).length > 0) {
+        setLoadingFolderNames(prev => ({ ...prev, ...newLoadingStates }));
       }
     };
 
     fetchFolderNames();
-  }, [currentPath, accessToken, folderNameCache, loadingFolderNames, fetchAndCacheFolderName]);
-
-  const searchGoogleDrive = useCallback(async (query: string, token: string) => {
-    console.log('Searching Google Drive...', { query });
-    setLoadingSearch(true);
-    setSearchResults(null);
-
-    // Use the already fetched files (which now include subfolders)
-    // and filter them by the search query
-    console.log('Filtering already fetched files for search query:', query);
-    const filteredResults = files.filter(item =>
-      item.name.toLowerCase().includes(query.toLowerCase())
-    );
-
-    console.log(`Found ${filteredResults.length} items matching search query after filtering.`);
-    setSearchResults(filteredResults);
-    setLoadingSearch(false);
-  }, [files]); // search depends only on the locally fetched files
-
-  useEffect(() => {
-    console.log('FileBrowser useEffect triggered', { currentPath, refreshTrigger, searchQuery, hasRootFolders: !!rootFolders, hasAccessToken: !!accessToken });
-
-    if (searchQuery === '') {
-      setSearchResults(null);
-      if (currentPath.length === 0 && accessToken) {
-        const match = driveUrl?.match(/folders\/([a-zA-Z0-9_-]+)/);
-        const rootFolderId = match ? match[1] : null;
-        if (rootFolderId) {
-          console.log('Attempting to fetch files for root folder:', rootFolderId);
-          fetchFolderContents(rootFolderId, accessToken);
-        } else if (rootFolders) {
-           console.log('Using existing rootFolders as no driveUrl or invalid driveUrl');
-           setFiles(rootFolders);
-        } else {
-           console.log('No driveUrl, rootFolderId, or rootFolders, clearing files');
-           setFiles([]);
-        }
-      } else if (currentPath.length > 0 && accessToken) {
-        const folderIdToFetch = currentPath[currentPath.length - 1];
-        console.log('Attempting to fetch files for subfolder:', folderIdToFetch);
-        fetchFolderContents(folderIdToFetch, accessToken);
-      } else {
-        console.log('Not at root with accessToken or in subfolder with accessToken, clearing files');
-        setFiles([]);
-      }
-    } else {
-      if (accessToken) {
-        searchGoogleDrive(searchQuery, accessToken);
-      } else {
-        console.log('No access token for search');
-        setSearchResults([]);
-      }
-    }
-
-  }, [currentPath, refreshTrigger, searchQuery, rootFolders, accessToken, fetchFolderContents, searchGoogleDrive, driveUrl, files, setFiles, setSearchResults]); // เพิ่ม dependencies ที่ขาดหายไป
-
-  // Determine files to display based on search state and current path
-  const filesToDisplay = searchQuery !== '' ? searchResults : (
-    (() => {
-      // Determine the current folder ID
-      const match = driveUrl?.match(/folders\/([a-zA-Z0-9_-]+)/);
-      const rootFolderId = match ? match[1] : null;
-      const currentFolderId = currentPath.length === 0 ? rootFolderId : currentPath[currentPath.length - 1];
-
-      // If we are at root and haven't determined rootFolderId, show nothing
-      if (currentPath.length === 0 && !rootFolderId) {
-          return [];
-      }
-
-      // Filter files to show only direct children of the current folder
-      return files.filter(item => {
-        // Items at the root should have the rootFolderId in their parents array
-        if (currentPath.length === 0 && rootFolderId) {
-          // Check if item has parents and if rootFolderId is among them
-          return item.parents?.includes(rootFolderId) ?? false;
-        }
-        // Items in a subfolder should have the currentFolderId in their parents array
-        else if (currentPath.length > 0 && currentFolderId) {
-           return item.parents?.includes(currentFolderId) ?? false;
-        }
-        // Otherwise, don't display
-        return false;
-      });
-    })()
-  );
-
-  // Sort the files: folders first, then files, both by name ascending
-  const displayedFiles = [...(filesToDisplay || [])].sort((a, b) => {
-    // Folders come before files
-    if (a.type === 'folder' && b.type !== 'folder') {
-      return -1; // a (folder) comes before b (file)
-    }
-    if (a.type !== 'folder' && b.type === 'folder') {
-      return 1;  // b (folder) comes before a (file)
-    }
-
-    // If both are folders or both are files, sort by name alphabetically
-    return a.name.localeCompare(b.name);
-  });
+  }, [currentPath, accessToken, folderNameCache, loadingFolderNames]);
 
   const handleRefresh = () => {
     console.log('handleRefresh called');
@@ -935,6 +939,73 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       }
   };
 
+  const handleShareFolder = async (email: string, role: 'reader' | 'writer') => {
+    if (!selectedFolder || !accessToken) return;
+
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${selectedFolder.id}/permissions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            role: role,
+            type: 'user',
+            emailAddress: email,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to share folder');
+      }
+
+      toast({
+        title: "แชร์โฟลเดอร์สำเร็จ",
+        description: `แชร์โฟลเดอร์ "${selectedFolder.name}" กับ ${email} แล้ว`,
+      });
+    } catch (error) {
+      console.error('Error sharing folder:', error);
+      throw error;
+    }
+  };
+
+  const renderFileItem = (item: FileItem) => {
+    const isFolder = item.type === 'folder';
+    const Icon = isFolder ? FolderUp : FileText;
+
+    return (
+      <div
+        key={item.id}
+        className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg cursor-pointer group"
+        onClick={() => isFolder ? onPathChange([...currentPath, item.id]) : onFileSelect(item)}
+      >
+        <div className="flex items-center space-x-3">
+          <Icon className="w-5 h-5 text-gray-500" />
+          <span className="text-sm">{item.name}</span>
+        </div>
+        {isFolder && userRole === 'Admin' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="opacity-0 group-hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedFolder(item);
+              setShowShareDialog(true);
+            }}
+          >
+            <Share2 className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <Card className="flex-1 m-4 mr-2">
       <CardHeader className="pb-4">
@@ -1018,13 +1089,13 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           </div>
         ) : (
           <div className="space-y-2">
-            {displayedFiles?.length === 0 ? (
+            {searchResults?.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Folder className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 <p>{searchQuery !== '' ? 'ไม่พบผลลัพธ์การค้นหา' : (currentPath.length === 0 ? 'ไม่พบข้อมูลใน Root Folder นี้' : 'ไม่พบข้อมูลในโฟลเดอร์นี้')}</p>
               </div>
             ) : (
-              displayedFiles?.map((file) => (
+              searchResults?.map((file) => (
                 <div key={file.id}>
                   {file.type === 'folder' ? (
                     <ContextMenu>
@@ -1158,6 +1229,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           </div>
         )}
       </CardContent>
+
+      <ShareDialog
+        isOpen={showShareDialog}
+        onClose={() => {
+          setShowShareDialog(false);
+          setSelectedFolder(null);
+        }}
+        onShare={handleShareFolder}
+        folderName={selectedFolder?.name || ''}
+      />
     </Card>
   );
 };
