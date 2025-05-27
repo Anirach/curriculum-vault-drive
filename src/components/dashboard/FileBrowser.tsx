@@ -97,6 +97,60 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     }
   }, [toast]);
 
+  // ฟังก์ชันใหม่สำหรับดึง Direct Children เท่านั้น
+  const fetchDirectChildren = useCallback(async (folderId: string, token: string): Promise<FileItem[]> => {
+    console.log('Fetching direct children of folder...', { folderId });
+    let allFiles: FileItem[] = [];
+    let pageToken: string | null = null;
+
+    try {
+      do {
+        const response = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken, files(id,name,mimeType,size,modifiedTime,parents,webViewLink)&access_token=${token}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? '&pageToken=' + pageToken : ''}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          console.error('Google Drive API error during fetchDirectChildren:', response.status, errorData);
+          throw new Error(`Google Drive API error: ${errorData.error?.message || response.statusText}`);
+        }
+
+        const data = await response.json();
+        if (data.files && Array.isArray(data.files)) {
+          const items: FileItem[] = data.files.map((item: GoogleDriveFile) => ({
+            id: item.id,
+            name: item.name,
+            type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file',
+            path: [], // path is managed at the Dashboard level
+            url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
+            size: item.size,
+            lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
+            parents: item.parents,
+          }));
+          allFiles = [...allFiles, ...items];
+          pageToken = data.nextPageToken || null;
+          console.log(`Fetched page for direct children of ${folderId}, found ${data.files.length} items, next page token: ${pageToken}`);
+        } else {
+           console.log('No items found or invalid response structure on a page in fetchDirectChildren.');
+           pageToken = null; // Stop pagination
+        }
+      } while (pageToken);
+
+      console.log('Fetched direct children successfully:', allFiles.length);
+      return allFiles;
+
+    } catch (error) {
+      console.error(`Error fetching direct children for folder ${folderId}:`, error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: `ไม่สามารถดึงข้อมูลโฟลเดอร์จาก Google Drive ได้: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+      throw error; // Rethrow to propagate error
+    }
+  }, [toast]);
+
   // Use fetchFolderContents to populate files state
   useEffect(() => {
     const loadFiles = async () => {
@@ -121,8 +175,21 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
       console.log('Loading files recursively from target folder:', targetFolderId);
       try {
-        const fetchedItems = await fetchFolderContents(targetFolderId, accessToken);
-        setFiles(fetchedItems);
+        // When at root, fetch only direct children and set as rootFolders
+        if (currentPath.length === 0 && targetFolderId) {
+            console.log('Fetching direct children for root folder:', targetFolderId);
+            const directChildren = await fetchDirectChildren(targetFolderId, accessToken);
+            setFiles(directChildren); // Display direct children at root
+            // Optionally, you might want to store rootFolders separately if needed elsewhere
+        }
+        // When in a subfolder, fetch only direct children
+        else if (currentPath.length > 0 && targetFolderId) {
+            console.log('Fetching direct children for subfolder:', targetFolderId);
+            const directChildren = await fetchDirectChildren(targetFolderId, accessToken);
+            setFiles(directChildren);
+        }
+        // Note: Recursive fetching (fetchFolderContents) is now only for search or other specific needs.
+
       } catch (error) {
         console.error('Failed to load files recursively:', error);
         setFiles([]);
@@ -132,7 +199,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     if (searchQuery === '') { // Only load files recursively when not searching
       loadFiles();
     }
-  }, [currentPath, refreshTrigger, accessToken, rootFolders, driveUrl, fetchFolderContents, searchQuery]); // Added searchQuery to dependencies
+  }, [currentPath, refreshTrigger, accessToken, rootFolders, driveUrl, fetchFolderContents, searchQuery, fetchDirectChildren, setFiles]); // เพิ่ม dependencies
 
   const fetchAndCacheFolderName = useCallback(async (folderId: string, token: string) => {
     if (folderNameCache[folderId] || loadingFolderNames[folderId]) {
