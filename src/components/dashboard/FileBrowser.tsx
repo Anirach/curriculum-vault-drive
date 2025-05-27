@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Upload, Folder, FileText, Search, ArrowLeft, Trash2, Download, Edit, RotateCw } from 'lucide-react';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useUser } from '@/contexts/UserContext';
-import { FileItem } from './Dashboard';
+import { FileItem, GoogleDriveFile } from './Dashboard';
 import { FolderActions, FolderActionsRef } from './FolderActions';
 import { toast } from '@/hooks/use-toast';
 import { UserRole } from '@/types/user';
@@ -33,56 +33,106 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   const [searchResults, setSearchResults] = useState<FileItem[] | null>(null);
   const [loadingSearch, setLoadingSearch] = useState(false);
 
-  const fetchFilesLocal = useCallback(async (folderIdToFetch: string, token: string) => {
-    console.log('Fetching files from Google Drive...', { folderId: folderIdToFetch });
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q='${folderIdToFetch}'+in+parents+and+trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink)&access_token=${token}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+  const driveUrl = localStorage.getItem('driveUrl');
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error('Google Drive API error during fetchFilesLocal:', response.status, errorData);
-        throw new Error(`Google Drive API error: ${errorData.error?.message || response.statusText}`);
+  const fetchFolderContents = useCallback(async (folderId: string, token: string, allItems: FileItem[] = []): Promise<FileItem[]> => {
+    console.log('Fetching contents of folder...', { folderId });
+    let pageToken: string | null = null;
+    let currentFolderItems: FileItem[] = [];
+
+    try {
+      do {
+        const response = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken, files(id,name,mimeType,size,modifiedTime,parents,webViewLink)&access_token=${token}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? '&pageToken=' + pageToken : ''}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          console.error('Google Drive API error during fetchFolderContents:', response.status, errorData);
+          throw new Error(`Google Drive API error: ${errorData.error?.message || response.statusText}`);
+        }
+
+        const data = await response.json();
+        if (data.files && Array.isArray(data.files)) {
+          const items: FileItem[] = data.files.map((item: GoogleDriveFile) => ({
+            id: item.id,
+            name: item.name,
+            type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file',
+            path: [], // path is managed at the Dashboard level
+            url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
+            size: item.size,
+            lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
+            parents: item.parents,
+          }));
+          currentFolderItems = [...currentFolderItems, ...items];
+          pageToken = data.nextPageToken || null;
+          console.log(`Fetched page for folder ${folderId}, found ${data.files.length} items, next page token: ${pageToken}`);
+        } else {
+           console.log('No items found or invalid response structure on a page in fetchFolderContents.');
+           pageToken = null; // Stop pagination
+        }
+      } while (pageToken);
+
+      // Add current folder items to the total list
+      allItems = [...allItems, ...currentFolderItems];
+
+      // Recursively fetch contents of subfolders
+      for (const item of currentFolderItems) {
+        if (item.type === 'folder') {
+          allItems = await fetchFolderContents(item.id, token, allItems);
+        }
       }
 
-      const data = await response.json();
-      if (!data.files || !Array.isArray(data.files)) {
-        console.log('No files found or invalid response structure in fetchFilesLocal.');
+      return allItems;
+
+    } catch (error) {
+      console.error(`Error fetching contents for folder ${folderId}:`, error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: `ไม่สามารถดึงข้อมูลโฟลเดอร์จาก Google Drive ได้: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+      throw error; // Rethrow to propagate error
+    }
+  }, [toast]);
+
+  // Use fetchFolderContents to populate files state
+  useEffect(() => {
+    const loadFiles = async () => {
+      console.log('FileBrowser useEffect triggered for loading files', { currentPath, refreshTrigger, hasRootFolders: !!rootFolders, hasAccessToken: !!accessToken });
+ 
+      if (!accessToken) {
+        console.log('No access token, clearing files.');
         setFiles([]);
         return;
       }
 
-      console.log('Files fetched successfully in fetchFilesLocal:', data.files.length);
-      interface GoogleDriveFileItem {
-        id: string;
-        name: string;
-        mimeType: string;
-        size?: string;
-        modifiedTime?: string;
-        webViewLink?: string;
+      // Determine the target folder ID based on currentPath
+      const match = driveUrl?.match(/folders\/([a-zA-Z0-9_-]+)/);
+      const rootFolderId = match ? match[1] : null;
+      const targetFolderId = currentPath.length > 0 ? currentPath[currentPath.length - 1] : rootFolderId;
+
+      if (!targetFolderId) {
+        console.log('No target folder ID determined, clearing files.');
+        setFiles([]);
+        return;
       }
-      const items = (data.files as GoogleDriveFileItem[]).map((item) => ({
-        id: item.id,
-        name: item.name,
-        type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' as 'folder' | 'file',
-        path: [], // path is managed at the Dashboard level
-        url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
-        size: item.size,
-        lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
-      }));
-      setFiles(items);
-    } catch (error) {
-      console.error('Error fetching files in fetchFilesLocal:', error);
-      setFiles([]);
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: `ไม่สามารถดึงข้อมูลจาก Google Drive ได้: ${error instanceof Error ? error.message : String(error)}`,
-        variant: "destructive",
-      });
+
+      console.log('Loading files recursively from target folder:', targetFolderId);
+      try {
+        const fetchedItems = await fetchFolderContents(targetFolderId, accessToken);
+        setFiles(fetchedItems);
+      } catch (error) {
+        console.error('Failed to load files recursively:', error);
+        setFiles([]);
+      }
+    };
+
+    if (searchQuery === '') { // Only load files recursively when not searching
+      loadFiles();
     }
-  }, [toast]);
+  }, [currentPath, refreshTrigger, accessToken, rootFolders, driveUrl, fetchFolderContents, searchQuery]); // Added searchQuery to dependencies
 
   const fetchAndCacheFolderName = useCallback(async (folderId: string, token: string) => {
     if (folderNameCache[folderId] || loadingFolderNames[folderId]) {
@@ -131,70 +181,42 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     setLoadingSearch(true);
     setSearchResults(null);
 
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=name+contains+'${query}'+and+trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink)&access_token=${token}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    // Use the already fetched files (which now include subfolders)
+    // and filter them by the search query
+    console.log('Filtering already fetched files for search query:', query);
+    const filteredResults = files.filter(item =>
+      item.name.toLowerCase().includes(query.toLowerCase())
+    );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error('Google Drive API error during searchGoogleDrive:', response.status, errorData);
-        throw new Error(`Google Drive API error: ${errorData.error?.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (!data.files || !Array.isArray(data.files)) {
-        console.log('No files found or invalid response structure in searchGoogleDrive.');
-        setSearchResults([]);
-      } else {
-        console.log('Search results fetched successfully:', data.files.length);
-        interface GoogleDriveFileItem {
-          id: string;
-          name: string;
-          mimeType: string;
-          size?: string;
-          modifiedTime?: string;
-          webViewLink?: string;
-        }
-        const items = (data.files as GoogleDriveFileItem[]).map((item) => ({
-          id: item.id,
-          name: item.name,
-          type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' as 'folder' | 'file',
-          path: [], // path is managed at the Dashboard level
-          url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
-          size: item.size,
-          lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
-        }));
-        setSearchResults(items);
-      }
-    } catch (error) {
-      console.error('Error searching Google Drive:', error);
-      setSearchResults([]);
-      toast({
-        title: "เกิดข้อผิดพลาดในการค้นหา",
-        description: `ไม่สามารถค้นหาใน Google Drive ได้: ${error instanceof Error ? error.message : String(error)}`,
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingSearch(false);
-    }
-  }, [accessToken, toast]);
+    console.log(`Found ${filteredResults.length} items matching search query after filtering.`);
+    setSearchResults(filteredResults);
+    setLoadingSearch(false);
+  }, [files]); // search depends only on the locally fetched files
 
   useEffect(() => {
     console.log('FileBrowser useEffect triggered', { currentPath, refreshTrigger, searchQuery, hasRootFolders: !!rootFolders, hasAccessToken: !!accessToken });
 
     if (searchQuery === '') {
       setSearchResults(null);
-      if (currentPath.length === 0 && rootFolders) {
-        console.log('Setting files to rootFolders');
-        setFiles(rootFolders);
+      if (currentPath.length === 0 && accessToken) {
+        const match = driveUrl?.match(/folders\/([a-zA-Z0-9_-]+)/);
+        const rootFolderId = match ? match[1] : null;
+        if (rootFolderId) {
+          console.log('Attempting to fetch files for root folder:', rootFolderId);
+          fetchFolderContents(rootFolderId, accessToken);
+        } else if (rootFolders) {
+           console.log('Using existing rootFolders as no driveUrl or invalid driveUrl');
+           setFiles(rootFolders);
+        } else {
+           console.log('No driveUrl, rootFolderId, or rootFolders, clearing files');
+           setFiles([]);
+        }
       } else if (currentPath.length > 0 && accessToken) {
         const folderIdToFetch = currentPath[currentPath.length - 1];
         console.log('Attempting to fetch files for subfolder:', folderIdToFetch);
-        fetchFilesLocal(folderIdToFetch, accessToken);
+        fetchFolderContents(folderIdToFetch, accessToken);
       } else {
-        console.log('Not at root with rootFolders or in subfolder with accessToken, clearing files');
+        console.log('Not at root with accessToken or in subfolder with accessToken, clearing files');
         setFiles([]);
       }
     } else {
@@ -206,9 +228,37 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       }
     }
 
-  }, [currentPath, refreshTrigger, searchQuery, rootFolders, accessToken, fetchFilesLocal, searchGoogleDrive]);
+  }, [currentPath, refreshTrigger, searchQuery, rootFolders, accessToken, fetchFolderContents, searchGoogleDrive, driveUrl, files, setFiles, setSearchResults]); // เพิ่ม dependencies ที่ขาดหายไป
 
-  const filteredFiles = files;
+  // Determine files to display based on search state and current path
+  const displayedFiles = searchQuery !== '' ? searchResults : (
+    (() => {
+      // Determine the current folder ID
+      const match = driveUrl?.match(/folders\/([a-zA-Z0-9_-]+)/);
+      const rootFolderId = match ? match[1] : null;
+      const currentFolderId = currentPath.length === 0 ? rootFolderId : currentPath[currentPath.length - 1];
+
+      // If we are at root and haven't determined rootFolderId, show nothing
+      if (currentPath.length === 0 && !rootFolderId) {
+          return [];
+      }
+
+      // Filter files to show only direct children of the current folder
+      return files.filter(item => {
+        // Items at the root should have the rootFolderId in their parents array
+        if (currentPath.length === 0 && rootFolderId) {
+          // Check if item has parents and if rootFolderId is among them
+          return item.parents?.includes(rootFolderId) ?? false;
+        }
+        // Items in a subfolder should have the currentFolderId in their parents array
+        else if (currentPath.length > 0 && currentFolderId) {
+           return item.parents?.includes(currentFolderId) ?? false;
+        }
+        // Otherwise, don't display
+        return false;
+      });
+    })()
+  );
 
   const handleRefresh = () => {
     console.log('handleRefresh called');
@@ -664,13 +714,13 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           </div>
         ) : (
           <div className="space-y-2">
-            {(searchQuery !== '' ? searchResults : filteredFiles)?.length === 0 ? (
+            {displayedFiles?.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Folder className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>{searchQuery !== '' ? 'ไม่พบผลลัพธ์การค้นหา' : 'No files found'}</p>
+                <p>{searchQuery !== '' ? 'ไม่พบผลลัพธ์การค้นหา' : (currentPath.length === 0 ? 'ไม่พบข้อมูลใน Root Folder นี้' : 'ไม่พบข้อมูลในโฟลเดอร์นี้')}</p>
               </div>
             ) : (
-              (searchQuery !== '' ? searchResults : filteredFiles)?.map((file) => (
+              displayedFiles?.map((file) => (
                 <div key={file.id}>
                   {file.type === 'folder' ? (
                     <ContextMenu>

@@ -21,9 +21,10 @@ export interface FileItem {
   url?: string;
   size?: string;
   lastModified?: string;
+  parents?: string[];
 }
 
-interface GoogleDriveFile {
+export interface GoogleDriveFile {
   id: string;
   name: string;
   mimeType: string;
@@ -33,7 +34,7 @@ interface GoogleDriveFile {
   modifiedTime?: string;
 }
 
-interface GoogleDriveResponse {
+export interface GoogleDriveResponse {
   files: GoogleDriveFile[];
 }
 
@@ -215,7 +216,7 @@ export const Dashboard = () => {
       }
 
       const redirectUri = window.location.origin;
-      const scope = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
+      const scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
 
       window.location.href = authUrl;
@@ -515,6 +516,7 @@ export const Dashboard = () => {
         url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
         size: item.size,
         lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
+        parents: item.parents,
       }));
       setRootFolders(items);
     } catch (error) {
