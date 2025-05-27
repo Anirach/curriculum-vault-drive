@@ -663,26 +663,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     input.click();
   };
 
-  const handleDelete = (file: FileItem) => {
+  const handleDelete = async (file: FileItem) => {
     if (!hasPermission('delete')) {
       toast({
-        title: "Access Denied",
-        description: "You don't have permission to delete files.",
+        title: "ไม่มีสิทธิ์",
+        description: "คุณไม่มีสิทธิ์ในการลบไฟล์",
         variant: "destructive",
       });
       return;
     }
 
-    // TODO: Implement actual Google Drive delete logic for files
-    toast({
-      title: "File Deleted",
-      description: `${file.name} has been deleted.`,
-    });
-    handleRefresh();
-  };
-
-  const handleDownload = (file: FileItem) => {
-    // ตรวจสอบ accessToken
     if (!accessToken) {
       toast({
         title: "เกิดข้อผิดพลาด",
@@ -692,46 +682,144 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       return;
     }
 
-    // สร้างลิงก์ดาวน์โหลดโดยตรงจาก Google Drive API
-    const downloadUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+    try {
+      // ยืนยันการลบ
+      if (!window.confirm(`คุณต้องการลบไฟล์ "${file.name}" ใช่หรือไม่?`)) {
+        return;
+      }
 
-    // เปิดลิงก์ดาวน์โหลดในแท็บใหม่
-    window.open(downloadUrl, '_blank');
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
 
-    toast({
-      title: "กำลังเริ่มดาวน์โหลด",
-      description: `กำลังดาวน์โหลด ${file.name}...`,
-    });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      toast({
+        title: "ลบไฟล์สำเร็จ",
+        description: `ลบไฟล์ "${file.name}" เรียบร้อยแล้ว`,
+      });
+
+      // รีเฟรชรายการไฟล์
+      handleRefresh();
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: `ไม่สามารถลบไฟล์ได้: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleView = (file: FileItem) => {
-    // handleView นี้อาจจะไม่จำเป็นต้องใช้แล้ว ถ้า handleItemClick จัดการการเปิดไฟล์ทั้งหมด
-    console.log('handleView called, likely not needed anymore.', file);
-     if (!hasPermission('view')) {
-       toast({
-         title: "Access Denied",
-         description: "You don't have permission to view files.",
-         variant: "destructive",
-       });
-       return;
-     }
-    // หากยังต้องการให้ handleView ทำงาน (เช่น จาก Context Menu)
-    // สามารถปรับให้ใช้ file.downloadUrl หรือ file.url ได้
-    const linkToOpen = file.downloadUrl || file.url;
-    if (linkToOpen) {
-         window.open(linkToOpen, '_blank');
-         toast({
-           title: "เปิดไฟล์",
-           description: `เปิด ${file.name} ในแท็บใหม่`, // อาจจะปรับข้อความถ้าเปิด direct link
-         });
-     } else {
-          toast({
-            title: "ไม่สามารถเปิดไฟล์ได้",
-            description: `ไม่มีลิงก์สำหรับเปิด ${file.name}`, // หรือไม่มีลิงก์ที่เหมาะสม
-            variant: "destructive",
-          });
-     }
+  const handleDownload = async (file: FileItem) => {
+    if (!accessToken) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่พบ Access Token กรุณาเข้าสู่ระบบใหม่",
+        variant: "destructive",
+      });
+      return;
+    }
 
+    try {
+      let downloadLink: string;
+
+      // สำหรับ Google Native files (Docs, Sheets, etc.)
+      if (file.mimeType && file.mimeType.startsWith('application/vnd.google-apps.')) {
+        // ใช้ export endpoint สำหรับ Google Docs เป็น PDF และเพิ่ม access_token ใน URL
+        downloadLink = `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=application/pdf&access_token=${accessToken}`;
+      } else {
+        // ใช้ webContentLink สำหรับไฟล์ทั่วไป
+        // หรือ fallback ไปใช้ alt=media endpoint ถ้า webContentLink ไม่มี
+        downloadLink = file.downloadUrl || `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&access_token=${accessToken}`;
+      }
+
+      if (!downloadLink) {
+         toast({
+          title: "เกิดข้อผิดพลาด",
+          description: "ไม่พบลิงก์ดาวน์โหลดสำหรับไฟล์นี้",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // เปิดลิงก์ดาวน์โหลดในแท็บใหม่ เพื่อให้เบราว์เซอร์จัดการการดาวน์โหลด
+      // สำหรับไฟล์ Google Native, การเปิดในแท็บใหม่จะทริกเกอร์การดาวน์โหลด PDF โดยตรง
+      window.open(downloadLink, '_blank');
+
+      toast({
+        title: "กำลังเริ่มดาวน์โหลด",
+        description: `กำลังดาวน์โหลด ${file.name}`,
+      });
+    } catch (error) {
+      console.error('Error preparing download link:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: `ไม่สามารถเตรียมลิงก์ดาวน์โหลดได้: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleView = async (file: FileItem) => {
+    if (!hasPermission('view')) {
+      toast({
+        title: "ไม่มีสิทธิ์",
+        description: "คุณไม่มีสิทธิ์ในการดูไฟล์",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!accessToken) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่พบ Access Token กรุณาเข้าสู่ระบบใหม่",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      let fileUrl: string;
+
+      // สำหรับ Google Native files (Docs, Sheets, etc.)
+      if (file.mimeType && file.mimeType.startsWith('application/vnd.google-apps.')) {
+        // ใช้ export endpoint สำหรับ Google Docs
+        fileUrl = `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=application/pdf&access_token=${accessToken}`;
+      } else {
+        // ใช้ webViewLink สำหรับไฟล์ทั่วไป
+        fileUrl = file.url || '';
+      }
+
+      if (!fileUrl) {
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: "ไม่สามารถเปิดไฟล์ได้",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // เปิดไฟล์ในแท็บใหม่
+      window.open(fileUrl, '_blank');
+      toast({
+        title: "เปิดไฟล์",
+        description: `เปิด ${file.name} ในแท็บใหม่`,
+      });
+    } catch (error) {
+      console.error('Error opening file:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: `ไม่สามารถเปิดไฟล์ได้: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRenameFolder = (folderName: string) => {
