@@ -1,4 +1,4 @@
-import { User, Invitation, UserRole } from '@/types/user';
+import { User, UserRole } from '@/types/user';
 // import { userQueries, settingsQueries } from './database'; // ลบ import นี้
 // import { getDatabase } from './database'; // ลบ import นี้
 
@@ -28,32 +28,6 @@ console.log('🔍 Raw import.meta.env values:', {
 
 export const userService = {
   // User management (ปรับให้จัดการด้วย localStorage หรือ logic ภายใน)
-  async login(email: string): Promise<User | null> {
-    try {
-      // กลับไปใช้ logic การตรวจสอบ admin email เดิม
-      const adminEmails = ['anirach.m@fitm.kmutnb.ac.th']; // กำหนด admin email ตรงนี้
-      const userRole: UserRole = adminEmails.includes(email.toLowerCase()) ? 'Admin' : 'Viewer';
-
-      // สร้าง user object (อาจจะต้องปรับตามโครงสร้าง User ที่ต้องการ)
-      const user: User = {
-        id: email, // ใช้ email เป็น ID ชั่วคราว
-        email: email,
-        name: email.split('@')[0], // ชื่อเริ่มต้นจาก email
-        role: userRole,
-        createdAt: new Date(),
-        updatedAt: new Date()
-        // เพิ่ม properties อื่นๆ ถ้าจำเป็นตาม User type
-      };
-      
-      // บันทึก user ใน localStorage
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      return user;
-    } catch (error) {
-      console.error('Error during login:', error);
-      return null;
-    }
-  },
-
   async getCurrentUser(): Promise<User | null> {
     try {
       // ดึง user จาก localStorage
@@ -81,12 +55,6 @@ export const userService = {
     localStorage.removeItem('clientId');
     localStorage.removeItem('clientSecret');
     localStorage.removeItem('driveUrl');
-  },
-
-  // ฟังก์ชัน updateUserRole อาจจะไม่มีการใช้งานถ้าไม่มีระบบจัดการผู้ใช้แบบเต็มรูปแบบ
-  async updateUserRole(userId: string, role: UserRole): Promise<User | null> {
-    console.warn('updateUserRole is not implemented without a database');
-    return null; // หรือจะ throw error ก็ได้
   },
 
   // Google Drive settings
@@ -122,70 +90,5 @@ export const userService = {
     localStorage.setItem('clientId', settings.clientId);
     localStorage.setItem('clientSecret', settings.clientSecret);
     localStorage.setItem('driveUrl', settings.driveUrl);
-  },
-
-  // Invitation management
-  async createInvitation(email: string, role: UserRole): Promise<Invitation | null> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/invitations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, role }),
-      });
-      if (!response.ok) return null;
-      return response.json();
-    } catch (error) {
-      console.error('Error creating invitation:', error);
-      return null;
-    }
-  },
-
-  async getInvitation(token: string): Promise<Invitation | null> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/invitations/${token}`);
-      if (!response.ok) return null;
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching invitation:', error);
-      return null;
-    }
-  },
-
-  async acceptInvitation(token: string, name: string): Promise<User | null> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/invitations/${token}/accept`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-      if (!response.ok) return null;
-      return response.json();
-    } catch (error) {
-      console.error('Error accepting invitation:', error);
-      return null;
-    }
-  },
-
-  async listInvitations(): Promise<Invitation[]> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/invitations`);
-      if (!response.ok) return [];
-      return response.json();
-    } catch (error) {
-      console.error('Error listing invitations:', error);
-      return [];
-    }
-  },
-
-  async revokeInvitation(invitationId: string): Promise<boolean> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/invitations/${invitationId}`, {
-        method: 'DELETE',
-      });
-      return response.ok;
-    } catch (error) {
-      console.error('Error revoking invitation:', error);
-      return false;
-    }
   },
 }; 

@@ -9,17 +9,6 @@ export interface User {
   updatedAt: Date;
 }
 
-export interface Invitation {
-  id: string;
-  email: string;
-  role: UserRole;
-  status: 'pending' | 'accepted' | 'expired';
-  token: string;
-  expiresAt: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export interface UserPermission {
   role: UserRole;
   permissions: {

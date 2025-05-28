@@ -19,7 +19,7 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
       await handleGoogleLogin();
     } catch (error) {
       console.error('Google login failed:', error);
-      // Fallback to regular login form if Google login fails
+      // Fallback to login form for invitation-based registration or error handling
       onLoginClick();
     }
   };

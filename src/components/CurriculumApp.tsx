@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LoginForm } from './auth/LoginForm';
 import { Dashboard } from './dashboard/Dashboard';
 import { LandingPage } from './LandingPage';
 import { UserProvider, useUser } from '@/contexts/UserContext';
@@ -19,7 +18,6 @@ interface User {
 
 const AppContent = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [showLoginForm, setShowLoginForm] = useState(false);
   const { user, isLoading, setUser, setIsLoading } = useUser();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -207,25 +205,15 @@ const AppContent = () => {
     };
 
     initializeApp();
-  }, [location.state, setUser, navigate, toast]);
+  }, [location.state, setUser, navigate, toast, setIsLoading, validateAndRefreshToken]);
 
   useEffect(() => {
     if (user) {
       setIsAuthenticated(true);
-      setShowLoginForm(false);
     } else {
       setIsAuthenticated(false);
     }
   }, [user]);
-
-  const handleLoginClick = () => {
-    setShowLoginForm(true);
-  };
-
-  const handleLoginSuccess = () => {
-    setIsAuthenticated(true);
-    setShowLoginForm(false);
-  };
 
   const handleGoogleLogin = async () => {
     try {
@@ -268,10 +256,6 @@ const AppContent = () => {
     );
   }
 
-  if (showLoginForm) {
-    return <LoginForm onLogin={handleLoginSuccess} />;
-  }
-
   if (isAuthenticated && user) {
     return (
       <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
@@ -284,7 +268,7 @@ const AppContent = () => {
 
   return (
     <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
-      <LandingPage onLoginClick={handleLoginClick} />
+      <LandingPage onLoginClick={handleGoogleLogin} />
     </AuthActionsProvider>
   );
 };

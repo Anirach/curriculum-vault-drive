@@ -1,14 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { GraduationCap, LogOut, User, Users } from 'lucide-react';
+import { GraduationCap, LogOut, User } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
-import { UserManagement } from '../admin/UserManagement';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { userService } from '@/services/userService';
-import { UserRole } from '@/types/user';
 
 export const Header = ({ 
   onConfigDrive, 
@@ -20,7 +16,6 @@ export const Header = ({
   accessToken?: string | null;
 }) => {
   const { user, setUser } = useUser();
-  const [showUserManagement, setShowUserManagement] = useState(false);
   const { toast } = useToast();
 
   const handleLogout = async () => {
@@ -59,17 +54,6 @@ export const Header = ({
     }
   };
 
-  const getRoleBadgeColor = (role: UserRole) => {
-    switch (role) {
-      case 'Admin':
-        return 'bg-red-500 hover:bg-red-600';
-      case 'Viewer':
-        return 'bg-green-500 hover:bg-green-600';
-      default:
-        return 'bg-gray-500 hover:bg-gray-600';
-    }
-  };
-
   return (
     <>
       <header className="bg-white border-b border-gray-200">
@@ -83,18 +67,10 @@ export const Header = ({
           {user && (
             <>
               <div className="flex items-center space-x-4">
-                {user.role === 'Admin' && (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => setShowUserManagement(true)}>
-                      <Users className="w-4 h-4 mr-2" />
-                      จัดการผู้ใช้
-                    </Button>
-                    {onConfigDrive && (
-                      <Button variant="outline" size="sm" onClick={onConfigDrive}>
-                        ตั้งค่า Drive
-                      </Button>
-                    )}
-                  </>
+                {user.role === 'Admin' && onConfigDrive && (
+                  <Button variant="outline" size="sm" onClick={onConfigDrive}>
+                    ตั้งค่า Drive
+                  </Button>
                 )}
                 {!accessToken && onConnectDrive && (
                   <Button variant="outline" size="sm" onClick={onConnectDrive}>
@@ -121,25 +97,6 @@ export const Header = ({
           )}
         </div>
       </header>
-      {showUserManagement && (
-        <Dialog open={showUserManagement} onOpenChange={setShowUserManagement}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Users className="w-4 h-4 mr-2" />
-              User Management
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" aria-describedby="user-management-description">
-            <DialogHeader>
-              <DialogTitle>User Management</DialogTitle>
-              <DialogDescription id="user-management-description">
-                จัดการผู้ใช้งานระบบ เพิ่ม แก้ไข หรือลบผู้ใช้งาน
-              </DialogDescription>
-            </DialogHeader>
-            <UserManagement />
-          </DialogContent>
-        </Dialog>
-      )}
     </>
   );
 };

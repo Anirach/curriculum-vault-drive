@@ -10,7 +10,6 @@ import { useUser } from '@/contexts/UserContext';
 import { userService } from '@/services/userService';
 import { UserRole } from '@/types/user';
 import { AuthActionsProvider } from '@/contexts/AuthActionsContext';
-import { LoginForm } from '../auth/LoginForm';
 import { Label } from '@/components/ui/label';
 
 export interface FileItem {
@@ -898,9 +897,12 @@ export const Dashboard = () => {
   if (!user) {
     return (
       <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
-        <LoginForm onLogin={() => {
-          // onLogin logic อาจจะ update user context ที่นี่
-        }} />
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">กำลังตรวจสอบการเข้าสู่ระบบ...</p>
+          </div>
+        </div>
       </AuthActionsProvider>
     );
   }
