@@ -22,6 +22,7 @@ const AppContent = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const refreshAccessToken = async (refreshToken: string, clientId: string, clientSecret: string) => {
     try {
@@ -95,7 +96,7 @@ const AppContent = () => {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        setIsLoading(true);
+        setIsInitializing(true);
         const code = location.state?.code;
         const authType = location.state?.type;
 
@@ -142,6 +143,7 @@ const AppContent = () => {
           }
 
           const userData = await userResponse.json();
+          // กำหนด role ตาม email เท่านั้น ไม่สนใจโดเมน
           const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
           const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
 
@@ -201,6 +203,8 @@ const AppContent = () => {
         localStorage.removeItem('userPicture');
       } finally {
         setIsLoading(false);
+        // รีเซ็ต isInitializing ทันทีหลังจากโหลดเสร็จ
+        setIsInitializing(false);
       }
     };
 
@@ -245,32 +249,50 @@ const AppContent = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">กำลังโหลด...</p>
-        </div>
+  // แยก Loading Screen เป็น component แยก
+  const LoadingScreen = () => (
+    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 transition-opacity duration-300">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600">
+          {isInitializing ? 'กำลังเริ่มต้นระบบ...' : 'กำลังโหลด...'}
+        </p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (isAuthenticated && user) {
-    return (
+  // แยก Landing Page Content เป็น component แยก
+  const LandingPageContent = () => (
+    <div className="transition-opacity duration-300">
+      <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
+        <LandingPage onLoginClick={handleGoogleLogin} />
+      </AuthActionsProvider>
+    </div>
+  );
+
+  // แยก Dashboard Content เป็น component แยก
+  const DashboardContent = () => (
+    <div className="transition-opacity duration-300">
       <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
           <Dashboard />
         </div>
       </AuthActionsProvider>
-    );
+    </div>
+  );
+
+  // จัดการการ render ตามสถานะต่างๆ
+  if (isLoading) {
+    return <LoadingScreen />;
   }
 
-  return (
-    <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
-      <LandingPage onLoginClick={handleGoogleLogin} />
-    </AuthActionsProvider>
-  );
+  // ถ้า authenticate แล้วและมี user ให้แสดง Dashboard
+  if (isAuthenticated && user) {
+    return <DashboardContent />;
+  }
+
+  // ถ้ายังไม่ได้ authenticate หรือไม่มี user ให้แสดง Landing Page
+  return <LandingPageContent />;
 };
 
 export const CurriculumApp = () => {

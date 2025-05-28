@@ -69,6 +69,7 @@ export const Dashboard = () => {
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   const [rootFolders, setRootFolders] = useState<FileItem[]>([]);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
@@ -94,16 +95,37 @@ export const Dashboard = () => {
 
   const handleTokenExpired = useCallback(() => {
     console.log('Handling token expired: Clearing session...');
+    setIsLoggingOut(true);
+    
+    // ล้างข้อมูลทั้งหมดใน localStorage
+    const keysToRemove = [
+      'accessToken',
+      'refreshToken',
+      'userEmail',
+      'userRole',
+      'currentUser',
+      'clientId',
+      'clientSecret',
+      'driveUrl'
+    ];
+    
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // รีเซ็ต state ทั้งหมด
     setAccessToken(null);
     setRefreshToken(null);
     setUserEmail(null);
     setUserRole(null);
     setUser(null);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('currentUser');
+    setRootFolders([]);
+    setCurrentPath([]);
+    setSelectedFile(null);
+    
+    // ใช้ setTimeout เพื่อให้ animation ทำงานเสร็จก่อน
+    setTimeout(() => {
+      setIsLoggingOut(false);
+      window.location.href = '/';
+    }, 300);
   }, [setUser]);
 
   const refreshAccessToken = useCallback(async (token: string) => {
@@ -171,23 +193,24 @@ export const Dashboard = () => {
           setUserEmail(email);
           console.log('Setting user email:', email);
         }
+        // กำหนด role ตาม email เท่านั้น ไม่สนใจโดเมน
         const determinedRole = role || (email && adminEmails.includes(email.toLowerCase()) ? 'Admin' : 'Viewer');
         if (determinedRole) {
           console.log('Setting user role:', determinedRole);
           setUserRole(determinedRole as UserRole);
           if (user && user.role !== determinedRole) {
-             setUser({ ...user, role: determinedRole as UserRole });
+            setUser({ ...user, role: determinedRole as UserRole });
           } else if (!user && email) {
-              const newUser = {
-                  id: 'oauth-user',
-                  email: email,
-                  name: email.split('@')[0],
-                  role: determinedRole as UserRole,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-              };
-              setUser(newUser);
-              localStorage.setItem('currentUser', JSON.stringify(newUser));
+            const newUser = {
+              id: 'oauth-user',
+              email: email,
+              name: email.split('@')[0],
+              role: determinedRole as UserRole,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+            setUser(newUser);
+            localStorage.setItem('currentUser', JSON.stringify(newUser));
           }
         }
         return true;
@@ -785,11 +808,6 @@ export const Dashboard = () => {
                 fetchFiles(folderId);
               } else {
                 console.error('Invalid driveUrl format:', settings.driveUrl);
-                toast({
-                  title: "เกิดข้อผิดพลาด",
-                  description: "รูปแบบ URL ของ Google Drive ไม่ถูกต้อง กรุณาตรวจสอบการตั้งค่า",
-                  variant: "destructive",
-                });
               }
             }
           }
@@ -970,10 +988,26 @@ export const Dashboard = () => {
     setSelectedFile(null);
   }, []);
 
+  // แยก Loading Screen เป็น component แยก
+  const LoadingScreen = () => (
+    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 transition-opacity duration-300">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600">กำลังออกจากระบบ...</p>
+      </div>
+    </div>
+  );
+
+  // ถ้ากำลัง logout ให้แสดง loading screen
+  if (isLoggingOut) {
+    return <LoadingScreen />;
+  }
+
+  // ถ้าไม่มี user ให้แสดง loading screen
   if (!user) {
     return (
       <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 transition-opacity duration-300">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-600">กำลังตรวจสอบการเข้าสู่ระบบ...</p>
@@ -985,7 +1019,7 @@ export const Dashboard = () => {
 
   return (
     <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 transition-opacity duration-300">
         <Header 
           onConfigDrive={() => {
             if (user.role === 'Admin') {
