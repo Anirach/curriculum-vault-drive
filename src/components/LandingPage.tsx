@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,14 +46,6 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Button 
-              onClick={handlePublicAccess}
-              variant="outline"
-              className="bg-white hover:bg-gray-50 text-blue-600 border-blue-200 px-8 py-4 text-lg rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
-            >
-              <Eye className="w-5 h-5 mr-2" />
-              เข้าถึงแบบสาธารณะ
-            </Button>
-            <Button 
               onClick={handleLoginClick}
               className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 text-lg rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
             >
@@ -63,11 +54,6 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </div>
-          
-          <p className="text-sm text-gray-500 mt-4 max-w-2xl mx-auto">
-            🔓 <strong>เข้าถึงแบบสาธารณะ:</strong> ดูไฟล์จากโฟลเดอร์สาธารณะโดยไม่ต้องเข้าสู่ระบบ<br/>
-            🔒 <strong>เข้าสู่ระบบ:</strong> เข้าถึงระบบจัดการเอกสารแบบเต็มรูปแบบ
-          </p>
         </div>
 
         {/* Features Section */}
