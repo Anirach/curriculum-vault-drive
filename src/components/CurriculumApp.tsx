@@ -24,16 +24,21 @@ const AppContent = () => {
   const location = useLocation();
   const [isInitializing, setIsInitializing] = useState(true);
 
-  const refreshAccessToken = async (refreshToken: string, clientId: string, clientSecret: string) => {
+  const refreshAccessToken = async (refreshToken: string) => {
     try {
+      const settings = await userService.getGoogleDriveSettings();
+      if (!settings?.clientId || !settings?.clientSecret) {
+        throw new Error('Google OAuth settings not configured');
+      }
+
       const response = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
+          client_id: settings.clientId,
+          client_secret: settings.clientSecret,
           refresh_token: refreshToken,
           grant_type: 'refresh_token',
         }),
@@ -58,11 +63,9 @@ const AppContent = () => {
   const validateAndRefreshToken = async () => {
     const refreshToken = localStorage.getItem('refreshToken');
     const accessToken = localStorage.getItem('accessToken');
-    const clientId = localStorage.getItem('clientId');
-    const clientSecret = localStorage.getItem('clientSecret');
 
-    if (!refreshToken || !clientId || !clientSecret) {
-      console.log('No refresh token or client credentials found');
+    if (!refreshToken) {
+      console.log('No refresh token found');
       return null;
     }
 
@@ -70,7 +73,7 @@ const AppContent = () => {
       // ถ้าไม่มี access token หรือ token หมดอายุ ให้ refresh
       if (!accessToken) {
         console.log('No access token, attempting to refresh...');
-        return await refreshAccessToken(refreshToken, clientId, clientSecret);
+        return await refreshAccessToken(refreshToken);
       }
 
       // ตรวจสอบว่า token ยังใช้งานได้หรือไม่
@@ -86,7 +89,7 @@ const AppContent = () => {
 
       // ถ้า token หมดอายุ ให้ refresh
       console.log('Access token expired, refreshing...');
-      return await refreshAccessToken(refreshToken, clientId, clientSecret);
+      return await refreshAccessToken(refreshToken);
     } catch (error) {
       console.error('Error validating token:', error);
       return null;
@@ -221,6 +224,48 @@ const AppContent = () => {
 
   const handleGoogleLogin = async () => {
     try {
+      // ตรวจสอบว่ามี refresh token อยู่หรือไม่
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          // ลองใช้ refresh token ก่อน
+          const newAccessToken = await refreshAccessToken(refreshToken);
+          if (newAccessToken) {
+            // ถ้าสำเร็จ ให้ดึงข้อมูลผู้ใช้
+            const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+              headers: {
+                Authorization: `Bearer ${newAccessToken}`,
+              },
+            });
+
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
+              const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
+
+              setUser({
+                email: userData.email,
+                name: userData.name,
+                picture: userData.picture,
+                role
+              });
+
+              // เก็บข้อมูลการ login
+              localStorage.setItem('userEmail', userData.email);
+              localStorage.setItem('userName', userData.name);
+              localStorage.setItem('userPicture', userData.picture);
+              localStorage.setItem('userRole', role);
+
+              navigate('/dashboard');
+              return;
+            }
+          }
+        } catch (error) {
+          console.log('Refresh token failed, proceeding with normal login');
+        }
+      }
+
+      // ถ้าไม่มี refresh token หรือ refresh ไม่สำเร็จ ให้ทำ OAuth ตามปกติ
       const settings = await userService.getGoogleDriveSettings();
       if (!settings || !settings.clientId || !settings.clientSecret) {
         toast({
@@ -231,9 +276,7 @@ const AppContent = () => {
         return;
       }
 
-      // บันทึก path ปัจจุบันก่อน redirect
       localStorage.setItem('returnPath', window.location.pathname);
-
       const redirectUri = `${window.location.origin}/auth/callback`;
       const scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify({ type: 'login' }))}`;
@@ -262,13 +305,28 @@ const AppContent = () => {
   );
 
   // แยก Landing Page Content เป็น component แยก
-  const LandingPageContent = () => (
-    <div className="transition-opacity duration-300">
-      <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
-        <LandingPage onLoginClick={handleGoogleLogin} />
-      </AuthActionsProvider>
-    </div>
-  );
+  const LandingPageContent = () => {
+    const handleLoginClick = async () => {
+      try {
+        await handleGoogleLogin();
+      } catch (error) {
+        console.error('Error during login:', error);
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: "ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง",
+          variant: "destructive",
+        });
+      }
+    };
+
+    return (
+      <div className="transition-opacity duration-300">
+        <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
+          <LandingPage onLoginClick={handleLoginClick} />
+        </AuthActionsProvider>
+      </div>
+    );
+  };
 
   // แยก Dashboard Content เป็น component แยก
   const DashboardContent = () => (
