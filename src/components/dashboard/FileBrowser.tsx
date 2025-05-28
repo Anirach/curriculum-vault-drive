@@ -13,6 +13,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
+// Helper function to sort files: folders first, then files, both in ascending alphabetical order
+const sortFiles = (files: FileItem[]): FileItem[] => {
+  return files.sort((a, b) => {
+    // Folders come first
+    if (a.type === 'folder' && b.type !== 'folder') return -1;
+    if (a.type !== 'folder' && b.type === 'folder') return 1;
+    
+    // Within the same type, sort alphabetically by name (case-insensitive)
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
+};
+
 interface FileBrowserProps {
   currentPath: string[];
   onPathChange: (path: string[]) => void;
@@ -193,7 +205,8 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         }
       }
 
-      return allItems;
+      // Sort all items before returning
+      return sortFiles(allItems);
 
     } catch (error) {
       console.error(`Error fetching contents for folder ${folderId}:`, error);
@@ -259,7 +272,8 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       } while (pageToken);
 
       console.log('Fetched direct children successfully:', allFiles.length);
-      return allFiles;
+      // Sort files before returning
+      return sortFiles(allFiles);
 
     } catch (error) {
       console.error(`Error fetching direct children for folder ${folderId}:`, error);
@@ -282,7 +296,8 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       // If we're at the root level and have rootFolders from Dashboard, use them
       if (currentPath.length === 0 && rootFolders && rootFolders.length > 0) {
         console.log('🗂️ Using rootFolders from Dashboard:', rootFolders.length, 'files');
-        setFiles(rootFolders);
+        // Ensure rootFolders are sorted (they should already be sorted from Dashboard, but ensure consistency)
+        setFiles(sortFiles(rootFolders));
         return;
       }
 

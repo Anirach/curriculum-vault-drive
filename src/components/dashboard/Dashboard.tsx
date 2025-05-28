@@ -42,6 +42,18 @@ export interface GoogleDriveResponse {
 
 const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
 
+// Helper function to sort files: folders first, then files, both in ascending alphabetical order
+const sortFiles = (files: FileItem[]): FileItem[] => {
+  return files.sort((a, b) => {
+    // Folders come first
+    if (a.type === 'folder' && b.type !== 'folder') return -1;
+    if (a.type !== 'folder' && b.type === 'folder') return 1;
+    
+    // Within the same type, sort alphabetically by name (case-insensitive)
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
+};
+
 interface ValidateAccessTokenParams {
   token: string;
   email?: string | null;
@@ -371,8 +383,11 @@ export const Dashboard = () => {
                   mimeType: item.mimeType,
                 }));
                 
-                console.log('🗂️ Setting files in rootFolders:', items.map(f => f.name));
-                setRootFolders(items);
+                // Sort files ascending with folders first
+                const sortedItems = sortFiles(items);
+                
+                console.log('🗂️ Setting files in rootFolders:', sortedItems.map(f => f.name));
+                setRootFolders(sortedItems);
               } else {
                 console.log('📁 Folder is empty');
                 setRootFolders([]);
@@ -684,8 +699,11 @@ export const Dashboard = () => {
         mimeType: item.mimeType,
       }));
       
-      console.log('🗂️ Processed items:', items.map(item => ({ name: item.name, type: item.type })));
-      setRootFolders(items);
+      // Sort files ascending with folders first
+      const sortedItems = sortFiles(items);
+      
+      console.log('🗂️ Processed items:', sortedItems.map(item => ({ name: item.name, type: item.type })));
+      setRootFolders(sortedItems);
     } catch (error) {
       console.error('❌ Error fetching files:', error);
       setRootFolders([]);
