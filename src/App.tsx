@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { AuthCallback } from "./components/auth/AuthCallback";
 import { Dashboard } from "./components/dashboard/Dashboard";
+import { PublicDashboard } from "./components/dashboard/PublicDashboard";
 import { UserProvider } from "@/contexts/UserContext";
 
 const queryClient = new QueryClient();
@@ -20,6 +21,8 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/public" element={<PublicDashboard />} />
+            <Route path="/oauth" element={<Index />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/dashboard" element={<Dashboard />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

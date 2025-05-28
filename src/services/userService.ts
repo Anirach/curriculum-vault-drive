@@ -11,6 +11,21 @@ const DEFAULT_GOOGLE_OAUTH_SETTINGS = {
   driveUrl: import.meta.env.VITE_GOOGLE_DRIVE_URL || ''
 };
 
+console.log('🔧 Environment variables loaded:', {
+  hasClientId: !!DEFAULT_GOOGLE_OAUTH_SETTINGS.clientId,
+  hasClientSecret: !!DEFAULT_GOOGLE_OAUTH_SETTINGS.clientSecret,
+  hasDriveUrl: !!DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl,
+  driveUrl: DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl,
+  clientIdValue: DEFAULT_GOOGLE_OAUTH_SETTINGS.clientId,
+  clientSecretValue: DEFAULT_GOOGLE_OAUTH_SETTINGS.clientSecret
+});
+
+console.log('🔍 Raw import.meta.env values:', {
+  VITE_GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+  VITE_GOOGLE_CLIENT_SECRET: import.meta.env.VITE_GOOGLE_CLIENT_SECRET,
+  VITE_GOOGLE_DRIVE_URL: import.meta.env.VITE_GOOGLE_DRIVE_URL
+});
+
 export const userService = {
   // User management (ปรับให้จัดการด้วย localStorage หรือ logic ภายใน)
   async login(email: string): Promise<User | null> {
@@ -81,12 +96,16 @@ export const userService = {
     const clientSecret = localStorage.getItem('clientSecret') || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientSecret;
     const driveUrl = localStorage.getItem('driveUrl') || DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl;
 
-    // ถ้าไม่มีค่าใดๆ เลย แสดงว่ายังไม่ได้ตั้งค่า
-    if (!clientId || !clientSecret) {
-      console.warn('Google OAuth settings not found');
-      return null;
-    }
+    console.log('getGoogleDriveSettings debug:', {
+      clientId: clientId ? `${clientId.substring(0, 10)}...` : 'empty',
+      clientSecret: clientSecret ? `${clientSecret.substring(0, 10)}...` : 'empty',
+      driveUrl: driveUrl || 'empty',
+      envClientId: DEFAULT_GOOGLE_OAUTH_SETTINGS.clientId ? `${DEFAULT_GOOGLE_OAUTH_SETTINGS.clientId.substring(0, 10)}...` : 'empty',
+      envDriveUrl: DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl || 'empty'
+    });
 
+    // Always return settings object, even if OAuth credentials are missing
+    // This allows the system to load the default drive URL from environment variables
     return {
       clientId,
       clientSecret,

@@ -20,6 +20,7 @@ interface FileBrowserProps {
   rootFolders?: FileItem[];
   userRole?: UserRole;
   accessToken?: string;
+  onInsufficientScopeError?: () => Promise<void>;
 }
 
 interface ShareDialogProps {
@@ -112,7 +113,7 @@ const ShareDialog: React.FC<ShareDialogProps> = ({ isOpen, onClose, onShare, fol
   );
 };
 
-export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolders, userRole, accessToken }: FileBrowserProps) => {
+export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolders, userRole, accessToken, onInsufficientScopeError }: FileBrowserProps) => {
   const { hasPermission } = useUser();
   const [searchQuery, setSearchQuery] = useState('');
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -146,6 +147,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           console.error('Google Drive API error during fetchFolderContents:', response.status, errorData);
+          
+          // Check for insufficient scope error
+          if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
+            console.log('Detected insufficient authentication scopes in fetchFolderContents, triggering re-authentication...');
+            if (onInsufficientScopeError) {
+              await onInsufficientScopeError();
+              return allItems; // Return current items to stop processing
+            }
+          }
+          
           throw new Error(`Google Drive API error: ${errorData.error?.message || response.statusText}`);
         }
 
@@ -193,7 +204,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       });
       throw error; // Rethrow to propagate error
     }
-  }, [toast]);
+  }, [onInsufficientScopeError]);
 
   // ฟังก์ชันใหม่สำหรับดึง Direct Children เท่านั้น
   const fetchDirectChildren = useCallback(async (folderId: string, token: string): Promise<FileItem[]> => {
@@ -211,6 +222,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           console.error('Google Drive API error during fetchDirectChildren:', response.status, errorData);
+          
+          // Check for insufficient scope error
+          if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
+            console.log('Detected insufficient authentication scopes in fetchDirectChildren, triggering re-authentication...');
+            if (onInsufficientScopeError) {
+              await onInsufficientScopeError();
+              return []; // Return empty array to stop processing
+            }
+          }
+          
           throw new Error(`Google Drive API error: ${errorData.error?.message || response.statusText}`);
         }
 
@@ -249,7 +270,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       });
       throw error; // Rethrow to propagate error
     }
-  }, [toast]);
+  }, [onInsufficientScopeError]);
 
   // แก้ไข useEffect สำหรับการโหลดไฟล์
   useEffect(() => {
@@ -411,6 +432,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         console.error('Google Drive API error during folder creation:', response.status, errorData);
+        
+        // Check for insufficient scope error
+        if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
+          console.log('Detected insufficient authentication scopes in addNewFolder, triggering re-authentication...');
+          if (onInsufficientScopeError) {
+            await onInsufficientScopeError();
+            return;
+          }
+        }
+        
         const errorMessage = errorData?.error?.message || response.statusText || "Unknown error";
         throw new Error(`เกิดข้อผิดพลาดในการสร้างโฟลเดอร์: ${errorMessage}`);
       }
@@ -461,6 +492,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
+        
+        // Check for insufficient scope error
+        if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
+          console.log('Detected insufficient authentication scopes in renameFolder, triggering re-authentication...');
+          if (onInsufficientScopeError) {
+            await onInsufficientScopeError();
+            return;
+          }
+        }
+        
         throw new Error(`เกิดข้อผิดพลาดในการเปลี่ยนชื่อโฟลเดอร์: ${response.status} ${response.statusText}`);
       }
 
@@ -506,6 +547,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
+        
+        // Check for insufficient scope error
+        if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
+          console.log('Detected insufficient authentication scopes in renameFile, triggering re-authentication...');
+          if (onInsufficientScopeError) {
+            await onInsufficientScopeError();
+            return;
+          }
+        }
+        
         const errorMessage = errorData?.error?.message || response.statusText || "Unknown error";
         throw new Error(`เกิดข้อผิดพลาดในการเปลี่ยนชื่อไฟล์: ${errorMessage}`);
       }
@@ -547,6 +598,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
+        
+        // Check for insufficient scope error
+        if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
+          console.log('Detected insufficient authentication scopes in deleteFolder, triggering re-authentication...');
+          if (onInsufficientScopeError) {
+            await onInsufficientScopeError();
+            return;
+          }
+        }
+        
         throw new Error(`เกิดข้อผิดพลาดในการลบโฟลเดอร์: ${response.status} ${response.statusText}`);
       }
 
@@ -611,6 +672,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Error fetching file content:', response.status, errorText);
+          
+          // Check for insufficient scope error
+          if (response.status === 403 && errorText.includes('insufficient authentication scopes')) {
+            console.log('Detected insufficient authentication scopes in handleItemClick, triggering re-authentication...');
+            if (onInsufficientScopeError) {
+              await onInsufficientScopeError();
+              return;
+            }
+          }
+          
           toast({
             title: "เกิดข้อผิดพลาดในการเปิดไฟล์",
             description: `ไม่สามารถดึงเนื้อหาไฟล์ได้: ${response.statusText || response.status}`,
@@ -635,7 +706,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         });
       }
     }
-  }, [currentPath, onPathChange, onFileSelect, accessToken, toast]);
+  }, [currentPath, onPathChange, onFileSelect, accessToken, onInsufficientScopeError]);
 
   const handleUpload = () => {
     if (!hasPermission('upload')) {
@@ -700,6 +771,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           if (!response.ok) {
             const errorData = await response.json().catch(() => null);
             console.error('Google Drive API error during file upload:', response.status, errorData);
+            
+            // Check for insufficient scope error
+            if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
+              console.log('Detected insufficient authentication scopes in file upload, triggering re-authentication...');
+              if (onInsufficientScopeError) {
+                await onInsufficientScopeError();
+                return;
+              }
+            }
+            
             const errorMessage = errorData?.error?.message || response.statusText || "Unknown error";
             throw new Error(`เกิดข้อผิดพลาดในการอัปโหลดไฟล์: ${errorMessage}`);
           }
@@ -760,6 +841,17 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       });
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        
+        // Check for insufficient scope error
+        if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
+          console.log('Detected insufficient authentication scopes in handleDelete, triggering re-authentication...');
+          if (onInsufficientScopeError) {
+            await onInsufficientScopeError();
+            return;
+          }
+        }
+        
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
@@ -961,6 +1053,16 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
       if (!response.ok) {
         const error = await response.json();
+        
+        // Check for insufficient scope error
+        if (response.status === 403 && error.error?.message?.includes('insufficient authentication scopes')) {
+          console.log('Detected insufficient authentication scopes in handleShareFolder, triggering re-authentication...');
+          if (onInsufficientScopeError) {
+            await onInsufficientScopeError();
+            return;
+          }
+        }
+        
         throw new Error(error.error?.message || 'Failed to share folder');
       }
 
