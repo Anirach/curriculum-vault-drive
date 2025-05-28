@@ -124,47 +124,6 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
             วิธีการใช้งาน
           </h2>
           
-          {/* Public Access Workflow */}
-          <div className="mb-12">
-            <h3 className="text-2xl font-semibold text-center text-blue-600 mb-8">
-              🔓 การเข้าถึงแบบสาธารณะ
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-white text-2xl font-bold">
-                  1
-                </div>
-                <h4 className="text-xl font-semibold mb-3">คลิกเข้าถึงสาธารณะ</h4>
-                <p className="text-gray-600">
-                  เข้าถึงโฟลเดอร์สาธารณะ
-                  โดยไม่ต้องมีบัญชีผู้ใช้
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-white text-2xl font-bold">
-                  2
-                </div>
-                <h4 className="text-xl font-semibold mb-3">เรียกดูไฟล์</h4>
-                <p className="text-gray-600">
-                  ดูรายการไฟล์และโฟลเดอร์
-                  ที่เปิดให้เข้าถึงสาธารณะ
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-white text-2xl font-bold">
-                  3
-                </div>
-                <h4 className="text-xl font-semibold mb-3">ดูและดาวน์โหลด</h4>
-                <p className="text-gray-600">
-                  อ่านเอกสาร PDF และ
-                  ดาวน์โหลดไฟล์ที่ต้องการ
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <hr className="border-gray-200 my-12" />
-
           {/* Authenticated Access Workflow */}
           <div>
             <h3 className="text-2xl font-semibold text-center text-green-600 mb-8">
