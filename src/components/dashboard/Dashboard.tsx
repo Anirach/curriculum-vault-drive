@@ -85,16 +85,9 @@ export const Dashboard = () => {
 
   // Debug useEffect to monitor rootFolders state
   useEffect(() => {
-    console.log('=== FileBrowser State Debug ===');
-    console.log('rootFolders:', rootFolders.length, 'items');
-    console.log('rootFolders content:', rootFolders.map(f => ({ name: f.name, type: f.type, id: f.id })));
-    console.log('currentPath:', currentPath);
-    console.log('accessToken available:', !!accessToken);
-    console.log('user:', user?.email || 'none');
   }, [rootFolders, currentPath, accessToken, user]);
 
   const handleTokenExpired = useCallback(() => {
-    console.log('Handling token expired: Clearing session...');
     setIsLoggingOut(true);
     
     // ล้างข้อมูลทั้งหมดใน localStorage
@@ -129,7 +122,6 @@ export const Dashboard = () => {
   }, [setUser]);
 
   const refreshAccessToken = useCallback(async (token: string) => {
-    console.log('Attempting to refresh access token...', { refreshToken: token });
     const settings = await userService.getGoogleDriveSettings();
     if (!settings.clientId || !settings.clientSecret) {
       console.error('Cannot refresh token: Missing client settings');
@@ -157,7 +149,6 @@ export const Dashboard = () => {
         throw new Error(data.error);
       }
 
-      console.log('Token refreshed successfully.');
       setAccessToken(data.access_token);
       localStorage.setItem('accessToken', data.access_token);
       if (data.refresh_token) {
@@ -174,12 +165,10 @@ export const Dashboard = () => {
   }, [handleTokenExpired]);
 
   const validateAccessToken = useCallback<ValidateAccessTokenFunction>(async ({ token, email, role }) => {
-    console.log('Validating access token...');
     try {
       const response = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + token);
 
       if (!response.ok) {
-        console.log('Token validation failed:', response.status);
         throw new Error('Invalid token');
       }
 
@@ -187,16 +176,12 @@ export const Dashboard = () => {
       const expirationTime = data.expires_in * 1000 + Date.now();
 
       if (expirationTime > Date.now()) {
-        console.log('Token is valid, setting up session...');
         setAccessToken(token);
         if (email) {
           setUserEmail(email);
-          console.log('Setting user email:', email);
         }
-        // กำหนด role ตาม email เท่านั้น ไม่สนใจโดเมน
         const determinedRole = role || (email && adminEmails.includes(email.toLowerCase()) ? 'Admin' : 'Viewer');
         if (determinedRole) {
-          console.log('Setting user role:', determinedRole);
           setUserRole(determinedRole as UserRole);
           if (user && user.role !== determinedRole) {
             setUser({ ...user, role: determinedRole as UserRole });
@@ -215,11 +200,9 @@ export const Dashboard = () => {
         }
         return true;
       } else if (refreshToken) {
-        console.log('Token expired, refreshing...');
         await refreshAccessToken(refreshToken);
         return true;
       } else {
-        console.log('Token expired and no refresh token available');
         handleTokenExpired();
         return false;
       }
@@ -227,7 +210,6 @@ export const Dashboard = () => {
       console.error('Error validating token:', error);
       if (refreshToken) {
         try {
-          console.log('Attempting to refresh token...');
           await refreshAccessToken(refreshToken);
           return true;
         } catch (refreshError) {
@@ -243,13 +225,10 @@ export const Dashboard = () => {
   }, [refreshToken, refreshAccessToken, handleTokenExpired, setUser, user, setUserEmail, setUserRole]);
 
   const handleGoogleLogin = useCallback(async () => {
-    console.log('handleGoogleLogin called');
     try {
       const settings = await userService.getGoogleDriveSettings();
-      console.log('Settings retrieved for login:', settings);
       
       if (!settings || !settings.clientId || !settings.clientSecret) {
-        console.log('Missing OAuth credentials, showing config dialog');
         if (user && user.role === 'Admin') {
           toast({
             title: "กรุณาตั้งค่า Google OAuth",
@@ -267,15 +246,12 @@ export const Dashboard = () => {
         return;
       }
 
-      console.log('Proceeding with OAuth redirect...');
-      // บันทึก path ปัจจุบันก่อน redirect
       localStorage.setItem('returnPath', window.location.pathname);
 
       const redirectUri = `${window.location.origin}/auth/callback`;
       const scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
 
-      console.log('Redirecting to OAuth URL:', authUrl.substring(0, 100) + '...');
       window.location.href = authUrl;
     } catch (error) {
       console.error('Error during Google login:', error);
@@ -288,11 +264,7 @@ export const Dashboard = () => {
   }, [user, toast]);
 
   const handleAuthCode = useCallback(async (code: string) => {
-    console.log('Handling authorization code...');
     try {
-      console.log('Processing authorization code...');
-      
-      // Get settings first to ensure we have client credentials
       const settings = await userService.getGoogleDriveSettings();
       if (!settings?.clientId || !settings?.clientSecret) {
         throw new Error('Missing OAuth client credentials');
@@ -317,8 +289,6 @@ export const Dashboard = () => {
         throw new Error(data.error);
       }
 
-      console.log('Token received, setting up user session...');
-
       setAccessToken(data.access_token);
       localStorage.setItem('accessToken', data.access_token);
 
@@ -336,8 +306,6 @@ export const Dashboard = () => {
       }
 
       const userData = await userResponse.json();
-      console.log('User info received from Google:', userData.email);
-
       const email = userData.email;
       setUserEmail(email);
       localStorage.setItem('userEmail', email);
@@ -358,31 +326,20 @@ export const Dashboard = () => {
       setUser(user);
       localStorage.setItem('currentUser', JSON.stringify(user));
       localStorage.setItem('userRole', determinedRole);
-      console.log('User session set after OAuth:', { email: user.email, role: user.role });
 
       toast({
         title: "เข้าสู่ระบบสำเร็จ",
         description: `ยินดีต้อนรับ ${user.name} (${user.role})`,
       });
 
-      // Enhanced auto-load with immediate file fetching
-      console.log('=== AUTO-LOAD AFTER AUTH ===');
       if (settings?.driveUrl) {
         const match = settings.driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
         const folderId = match ? match[1] : null;
         
-        console.log('Drive URL parsing:', { 
-          driveUrl: settings.driveUrl, 
-          folderId,
-          hasAccessToken: !!data.access_token 
-        });
-        
         if (folderId) {
-          console.log('Setting drive URL and forcing immediate file fetch...');
           setDriveUrl(settings.driveUrl);
           setInputUrl(settings.driveUrl);
           
-          // Force immediate file fetch with the new token
           try {
             const driveResponse = await fetch(
               `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)`,
@@ -391,7 +348,6 @@ export const Dashboard = () => {
 
             if (driveResponse.ok) {
               const driveData = await driveResponse.json();
-              console.log('✅ Immediate fetch successful:', driveData.files?.length, 'files found');
               
               if (driveData.files && driveData.files.length > 0) {
                 const items: FileItem[] = driveData.files.map((item: GoogleDriveFile) => ({
@@ -407,13 +363,10 @@ export const Dashboard = () => {
                   mimeType: item.mimeType,
                 }));
                 
-                // Sort files ascending with folders first
                 const sortedItems = sortFiles(items);
                 
-                console.log('🗂️ Setting files in rootFolders:', sortedItems.map(f => f.name));
                 setRootFolders(sortedItems);
               } else {
-                console.log('📁 Folder is empty');
                 setRootFolders([]);
               }
             } else {
@@ -429,7 +382,6 @@ export const Dashboard = () => {
           setRootFolders([]);
         }
       } else {
-        console.log('ℹ️ No default drive URL configured');
         setRootFolders([]);
       }
 
@@ -475,10 +427,8 @@ export const Dashboard = () => {
       setDriveUrl(inputUrl);
       localStorage.setItem('driveUrl', inputUrl);
 
-      // ทดสอบการเข้าถึงโฟลเดอร์ทันที
       if (accessToken) {
         const folderId = match[1];
-        console.log('Testing access to folder:', folderId);
         await fetchFiles(folderId);
       }
 
@@ -497,7 +447,6 @@ export const Dashboard = () => {
   };
 
   const handleTestAccess = useCallback(async () => {
-    console.log('Testing Google Drive access...');
     if (!clientId || !clientSecret || !inputUrl) {
       setTestResult('Error: Missing Client ID, Client Secret, or Drive Folder URL');
       return;
@@ -574,11 +523,6 @@ export const Dashboard = () => {
   }, [clientId, clientSecret, inputUrl, accessToken, refreshToken, validateAccessToken, refreshAccessToken, userEmail, userRole]);
 
   const handleInsufficientScopeError = useCallback(async () => {
-    console.log('Detected insufficient authentication scopes, forcing re-authentication...');
-    
-    // Clear existing tokens since they don't have the right permissions
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
     setAccessToken(null);
     setRefreshToken(null);
     
@@ -608,7 +552,6 @@ export const Dashboard = () => {
         return;
       }
 
-      // บันทึก path ปัจจุบันก่อน redirect
       localStorage.setItem('returnPath', window.location.pathname);
 
       const redirectUri = `${window.location.origin}/auth/callback`;
@@ -627,40 +570,26 @@ export const Dashboard = () => {
   }, [user, toast, setAccessToken, setRefreshToken]);
 
   const fetchFiles = useCallback(async (targetFolderId: string) => {
-    console.log('=== FETCH FILES DEBUG ===');
-    console.log('Attempting to fetch files from folder ID:', { 
-      targetFolderId: targetFolderId, 
-      accessToken: !!accessToken,
-      accessTokenLength: accessToken?.length 
-    });
-
     if (!targetFolderId) {
-      console.log('❌ No valid target folder ID provided.');
       setRootFolders([]);
       return;
     }
 
     if (!accessToken) {
-      console.log('❌ No access token available to fetch files.');
       setRootFolders([]);
       return;
     }
 
     try {
-      console.log('🔄 Fetching files from Google Drive...', { folderId: targetFolderId });
       const response = await fetch(
         `https://www.googleapis.com/drive/v3/files?q='${targetFolderId}' in parents and trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
-      console.log('📡 Google Drive API response status:', response.status);
-
       if (response.status === 401) {
-        console.log('🔑 Access token expired, attempting refresh...');
         if (refreshToken) {
           try {
             const newToken = await refreshAccessToken(refreshToken);
-            console.log('✅ Token refreshed, retrying fetchFiles...');
             return fetchFiles(targetFolderId);
           } catch (error) {
             console.error('❌ Error refreshing token during fetchFiles:', error);
@@ -674,7 +603,6 @@ export const Dashboard = () => {
             return;
           }
         } else {
-          console.log('❌ No refresh token available, clearing session...');
           handleTokenExpired();
           setRootFolders([]);
           toast({
@@ -690,9 +618,7 @@ export const Dashboard = () => {
         const errorData = await response.json();
         console.error('❌ Google Drive API error during fetchFiles:', response.status, errorData);
         
-        // Check for insufficient scope error
         if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
-          console.log('🔐 Detected insufficient authentication scopes, triggering re-authentication...');
           await handleInsufficientScopeError();
           return;
         }
@@ -701,15 +627,12 @@ export const Dashboard = () => {
       }
       
       const data = await response.json();
-      console.log('📊 Google Drive API raw response data:', data);
       
       if (!data.files || !Array.isArray(data.files)) {
-        console.log('⚠️ No files found or invalid response structure.');
         setRootFolders([]);
         return;
       }
 
-      console.log('✅ Files fetched successfully:', data.files.length);
       const items: FileItem[] = (data as GoogleDriveResponse).files.map((item) => ({
         id: item.id,
         name: item.name,
@@ -723,10 +646,8 @@ export const Dashboard = () => {
         mimeType: item.mimeType,
       }));
       
-      // Sort files ascending with folders first
       const sortedItems = sortFiles(items);
       
-      console.log('🗂️ Processed items:', sortedItems.map(item => ({ name: item.name, type: item.type })));
       setRootFolders(sortedItems);
     } catch (error) {
       console.error('❌ Error fetching files:', error);
@@ -760,7 +681,6 @@ export const Dashboard = () => {
         return;
       }
 
-      // บันทึก path ปัจจุบันก่อน redirect
       localStorage.setItem('returnPath', window.location.pathname);
 
       const redirectUri = `${window.location.origin}/auth/callback`;
@@ -782,7 +702,6 @@ export const Dashboard = () => {
     const loadSettings = async () => {
       try {
         const settings = await userService.getGoogleDriveSettings();
-        console.log('Loaded Google Drive settings:', settings);
         
         if (settings) {
           if (settings.clientId) {
@@ -798,13 +717,11 @@ export const Dashboard = () => {
             setInputUrl(settings.driveUrl);
             localStorage.setItem('driveUrl', settings.driveUrl);
             
-            // ตรวจสอบและดึงข้อมูลโฟลเดอร์ทันทีถ้ามี accessToken
             const storedAccessToken = localStorage.getItem('accessToken');
             if (storedAccessToken) {
               const match = settings.driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
               const folderId = match ? match[1] : null;
               if (folderId) {
-                console.log('Found folder ID from driveUrl, fetching files...', folderId);
                 fetchFiles(folderId);
               } else {
                 console.error('Invalid driveUrl format:', settings.driveUrl);
@@ -825,7 +742,6 @@ export const Dashboard = () => {
   }, [toast, fetchFiles]);
 
   useEffect(() => {
-    console.log('Dashboard mounted, attempting to load user session and handle OAuth...');
     const loadUserSessionAndHandleOAuth = async () => {
       try {
         const storedEmail = localStorage.getItem('userEmail');
@@ -834,15 +750,6 @@ export const Dashboard = () => {
         const storedClientId = localStorage.getItem('clientId');
         const storedClientSecret = localStorage.getItem('clientSecret');
         const storedDriveUrl = localStorage.getItem('driveUrl');
-
-        console.log('Loading session and settings from localStorage:', {
-          email: storedEmail,
-          hasAccessToken: !!storedAccessToken,
-          hasRefreshToken: !!storedRefreshToken,
-          hasClientId: !!storedClientId,
-          hasClientSecret: !!storedClientSecret,
-          hasDriveUrl: !!storedDriveUrl
-        });
 
         if (!clientId && storedClientId) setClientId(storedClientId);
         if (!clientSecret && storedClientSecret) setClientSecret(storedClientSecret);
@@ -861,7 +768,6 @@ export const Dashboard = () => {
         const code = urlParams.get('code');
 
         if (code) {
-          console.log('Found authorization code in URL.');
           await handleAuthCode(code);
           window.history.replaceState({}, document.title, window.location.pathname);
         } else if (storedAccessToken) {
@@ -884,26 +790,15 @@ export const Dashboard = () => {
   }, [handleTokenExpired, handleAuthCode, validateAccessToken, setUser, toast, clientId, clientSecret, driveUrl, accessToken, refreshToken, userEmail, userRole, user]);
 
   useEffect(() => {
-    console.log('=== MAIN FETCH TRIGGER useEffect ===');
     const match = driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
     const initialFolderId = match ? match[1] : null;
 
-    console.log('Checking folder ID to fetch:', {
-      driveUrl,
-      initialFolderId,
-      currentPath: currentPath.length,
-      hasAccessToken: !!accessToken,
-      accessTokenPreview: accessToken ? `${accessToken.substring(0, 10)}...` : 'none'
-    });
-
     if (!driveUrl) {
-      console.log('❌ No driveUrl set, skipping fetchFiles');
       setRootFolders([]);
       return;
     }
 
     if (!accessToken) {
-      console.log('❌ No access token available, skipping fetchFiles');
       setRootFolders([]);
       return;
     }
@@ -913,53 +808,31 @@ export const Dashboard = () => {
       : initialFolderId;
 
     if (folderIdToFetch) {
-      console.log('✅ Triggering fetchFiles for folder ID:', folderIdToFetch);
       fetchFiles(folderIdToFetch);
     } else {
-      console.log('❌ No folder ID to fetch');
       setRootFolders([]);
     }
 
   }, [driveUrl, accessToken, currentPath, fetchFiles]);
 
-  // Auto-load drive URL from environment when access token becomes available
   useEffect(() => {
-    console.log('=== AUTO-LOAD ENV useEffect ===');
     const autoLoadDriveUrlFromEnv = async () => {
-      // Only try to auto-load if we have an access token but no drive URL set
-      console.log('Auto-load check:', {
-        hasAccessToken: !!accessToken,
-        hasDriveUrl: !!driveUrl,
-        accessTokenPreview: accessToken ? `${accessToken.substring(0, 10)}...` : 'none',
-        currentDriveUrl: driveUrl || 'none'
-      });
-      
       if (accessToken && !driveUrl) {
-        console.log('🔄 Access token available but no drive URL, checking environment variables...');
+        
         try {
           const settings = await userService.getGoogleDriveSettings();
-          console.log('🔧 Retrieved settings for auto-load:', {
-            hasDriveUrl: !!settings?.driveUrl,
-            driveUrl: settings?.driveUrl || 'none'
-          });
           
           if (settings?.driveUrl) {
-            console.log('✅ Loading drive URL from environment:', settings.driveUrl);
+            
             setDriveUrl(settings.driveUrl);
             setInputUrl(settings.driveUrl);
             localStorage.setItem('driveUrl', settings.driveUrl);
             
-            // Extract folder ID and fetch files
             const match = settings.driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
             const folderId = match ? match[1] : null;
             if (folderId) {
-              console.log('🗂️ Auto-fetching files from environment drive URL:', folderId);
               fetchFiles(folderId);
-            } else {
-              console.log('❌ Invalid folder URL format:', settings.driveUrl);
             }
-          } else {
-            console.log('⚠️ No drive URL found in environment settings');
           }
         } catch (error) {
           console.error('❌ Error auto-loading drive URL from environment:', error);
@@ -988,7 +861,6 @@ export const Dashboard = () => {
     setSelectedFile(null);
   }, []);
 
-  // แยก Loading Screen เป็น component แยก
   const LoadingScreen = () => (
     <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 transition-opacity duration-300">
       <div className="text-center">
@@ -998,12 +870,10 @@ export const Dashboard = () => {
     </div>
   );
 
-  // ถ้ากำลัง logout ให้แสดง loading screen
   if (isLoggingOut) {
     return <LoadingScreen />;
   }
 
-  // ถ้าไม่มี user ให้แสดง loading screen
   if (!user) {
     return (
       <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>

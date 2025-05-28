@@ -38,13 +38,6 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
     // canManageFolders ควรใช้ hasPermission('create') หรือ 'write' ถ้ามี
     // ตามที่เห็นใน FileBrowser ใช้ hasPermission('upload') ซึ่งก็พอใช้ได้
     const canManageFolders = hasPermission('upload'); 
-    console.log('User permissions in FolderActions:', {
-      hasUploadPermission: hasPermission('upload'),
-      userRole,
-      accessToken: !!accessToken,
-      canManageFolders,
-      disabled
-    });
 
     useImperativeHandle(ref, () => ({
       openRenameDialog: (folderName: string) => {
@@ -56,16 +49,7 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
 
     // แก้ไขฟังก์ชัน handleCreateFolder ให้เรียกใช้ onAddFolder prop
     const handleCreateFolder = async () => {
-      console.log('handleCreateFolder in FolderActions called', {
-        newFolderName,
-        currentPath,
-        userRole,
-        accessToken: !!accessToken,
-        canManageFolders
-      });
-
       if (!canManageFolders) {
-        console.log('Permission denied: canManageFolders is false');
         toast({
           title: "ไม่มีสิทธิ์",
           description: "คุณไม่มีสิทธิ์ในการสร้างโฟลเดอร์",
@@ -74,7 +58,6 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
         return;
       }
       if (!newFolderName.trim()) {
-        console.log('Invalid folder name: empty name');
         toast({
           title: "ชื่อไม่ถูกต้อง",
           description: "กรุณากรอกชื่อโฟลเดอร์",
@@ -90,8 +73,6 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
         // FileBrowser จะจัดการ logic การหา parentId และเรียก Google Drive API เอง
         await onAddFolder(newFolderName.trim());
 
-        // ถ้า onAddFolder สำเร็จ (ไม่มี error ถูก throw กลับมา)
-        console.log('onAddFolder call successful');
         // รีเซ็ตค่าและปิด dialog
         setNewFolderName('');
         setIsCreateOpen(false);
@@ -187,12 +168,6 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
                 size="sm" 
                 variant="outline"
                 onClick={() => {
-                  console.log('New Folder button clicked in FolderActions', {
-                    isCreateOpen,
-                    canManageFolders,
-                    accessToken: !!accessToken,
-                    userRole
-                  });
                   setIsCreateOpen(true); // เปิด dialog เมื่อคลิก
                 }}
               >
@@ -223,12 +198,6 @@ export const FolderActions = forwardRef<FolderActionsRef, FolderActionsProps>(
                   </Button>
                   <Button
                     onClick={() => {
-                      console.log('Create folder button clicked in FolderActions Dialog', {
-                        folderName: newFolderName,
-                        currentPath, // log currentPath เพื่อ debug เพิ่มเติม
-                        userRole,
-                        accessToken: !!accessToken
-                      });
                       handleCreateFolder();
                     }}
                   >

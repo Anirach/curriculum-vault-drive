@@ -145,7 +145,6 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   const [selectedFolder, setSelectedFolder] = useState<FileItem | null>(null);
 
   const fetchFolderContents = useCallback(async (folderId: string, token: string, allItems: FileItem[] = []): Promise<FileItem[]> => {
-    console.log('Fetching contents of folder...', { folderId });
     let pageToken: string | null = null;
     let currentFolderItems: FileItem[] = [];
 
@@ -160,12 +159,10 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           const errorData = await response.json().catch(() => null);
           console.error('Google Drive API error during fetchFolderContents:', response.status, errorData);
           
-          // Check for insufficient scope error
           if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
-            console.log('Detected insufficient authentication scopes in fetchFolderContents, triggering re-authentication...');
             if (onInsufficientScopeError) {
               await onInsufficientScopeError();
-              return allItems; // Return current items to stop processing
+              return allItems;
             }
           }
           
@@ -188,10 +185,8 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           }));
           currentFolderItems = [...currentFolderItems, ...items];
           pageToken = data.nextPageToken || null;
-          console.log(`Fetched page for folder ${folderId}, found ${data.files.length} items, next page token: ${pageToken}`);
         } else {
-           console.log('No items found or invalid response structure on a page in fetchFolderContents.');
-           pageToken = null; // Stop pagination
+          pageToken = null;
         }
       } while (pageToken);
 
@@ -209,19 +204,13 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       return sortFiles(allItems);
 
     } catch (error) {
-      console.error(`Error fetching contents for folder ${folderId}:`, error);
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: `ไม่สามารถดึงข้อมูลโฟลเดอร์จาก Google Drive ได้: ${error instanceof Error ? error.message : String(error)}`,
-        variant: "destructive",
-      });
-      throw error; // Rethrow to propagate error
+      console.error('Error in fetchFolderContents:', error);
+      throw error;
     }
   }, [onInsufficientScopeError]);
 
   // ฟังก์ชันใหม่สำหรับดึง Direct Children เท่านั้น
   const fetchDirectChildren = useCallback(async (folderId: string, token: string): Promise<FileItem[]> => {
-    console.log('Fetching direct children of folder...', { folderId });
     let allFiles: FileItem[] = [];
     let pageToken: string | null = null;
 
@@ -236,12 +225,10 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           const errorData = await response.json().catch(() => null);
           console.error('Google Drive API error during fetchDirectChildren:', response.status, errorData);
           
-          // Check for insufficient scope error
           if (response.status === 403 && errorData.error?.message?.includes('insufficient authentication scopes')) {
-            console.log('Detected insufficient authentication scopes in fetchDirectChildren, triggering re-authentication...');
             if (onInsufficientScopeError) {
               await onInsufficientScopeError();
-              return []; // Return empty array to stop processing
+              return [];
             }
           }
           
@@ -264,25 +251,15 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           }));
           allFiles = [...allFiles, ...items];
           pageToken = data.nextPageToken || null;
-          console.log(`Fetched page for direct children of ${folderId}, found ${data.files.length} items, next page token: ${pageToken}`);
         } else {
-           console.log('No items found or invalid response structure on a page in fetchDirectChildren.');
-           pageToken = null; // Stop pagination
+          pageToken = null;
         }
       } while (pageToken);
 
-      console.log('Fetched direct children successfully:', allFiles.length);
-      // Sort files before returning
-      return sortFiles(allFiles);
-
+      return allFiles;
     } catch (error) {
-      console.error(`Error fetching direct children for folder ${folderId}:`, error);
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: `ไม่สามารถดึงข้อมูลโฟลเดอร์จาก Google Drive ได้: ${error instanceof Error ? error.message : String(error)}`,
-        variant: "destructive",
-      });
-      throw error; // Rethrow to propagate error
+      console.error('Error fetching direct children for folder:', error);
+      throw error;
     }
   }, [onInsufficientScopeError]);
 
@@ -295,8 +272,6 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
       // If we're at the root level and have rootFolders from Dashboard, use them
       if (currentPath.length === 0 && rootFolders && rootFolders.length > 0) {
-        console.log('🗂️ Using rootFolders from Dashboard:', rootFolders.length, 'files');
-        // Ensure rootFolders are sorted (they should already be sorted from Dashboard, but ensure consistency)
         setFiles(sortFiles(rootFolders));
         return;
       }
@@ -393,9 +368,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   }, [currentPath, accessToken, folderNameCache, loadingFolderNames]);
 
   const handleRefresh = () => {
-    console.log('handleRefresh called');
     setRefreshTrigger(prev => {
-      console.log('refreshTrigger changed from', prev, 'to', prev + 1);
       return prev + 1;
     });
   };
@@ -659,7 +632,6 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       const newPath = [...currentPath, item.id];
       onPathChange(newPath);
     } else {
-      console.log('File clicked, attempting to fetch content...', item);
       if (!accessToken) {
         toast({
           title: "เกิดข้อผิดพลาด",
@@ -672,7 +644,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       try {
         let fileContentUrl: string;
 
-        // สำหรับ Google Native files (Docs, Sheets, etc.) ที่แปลงเป็น PDF
+        // สำหรับ Google Native files (Docs, Sheets, etc.)
         if (item.mimeType && item.mimeType.startsWith('application/vnd.google-apps.')) {
           // ใช้ export endpoint สำหรับ Google Docs
           fileContentUrl = `https://www.googleapis.com/drive/v3/files/${item.id}/export?mimeType=application/pdf`;
@@ -680,8 +652,6 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           // ใช้ alt=media endpoint สำหรับไฟล์ทั่วไป
           fileContentUrl = `https://www.googleapis.com/drive/v3/files/${item.id}?alt=media`;
         }
-
-        console.log('Fetching file content from:', fileContentUrl);
 
         // ดึงเนื้อหาไฟล์โดยตรงจาก Google Drive API
         const response = await fetch(fileContentUrl, {
@@ -693,11 +663,9 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('Error fetching file content:', response.status, errorText);
           
           // Check for insufficient scope error
           if (response.status === 403 && errorText.includes('insufficient authentication scopes')) {
-            console.log('Detected insufficient authentication scopes in handleItemClick, triggering re-authentication...');
             if (onInsufficientScopeError) {
               await onInsufficientScopeError();
               return;
@@ -720,7 +688,6 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         onFileSelect({...item, url: blobUrl});
 
       } catch (error) {
-        console.error('Error in handleItemClick fetching file content:', error);
         toast({
           title: "เกิดข้อผิดพลาด",
           description: `ไม่สามารถเปิดไฟล์ได้: ${error instanceof Error ? error.message : String(error)}`,
@@ -905,40 +872,66 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     }
 
     try {
-      let downloadLink: string;
+      let downloadUrl: string;
 
       // สำหรับ Google Native files (Docs, Sheets, etc.)
       if (file.mimeType && file.mimeType.startsWith('application/vnd.google-apps.')) {
-        // ใช้ export endpoint สำหรับ Google Docs เป็น PDF และเพิ่ม access_token ใน URL
-        downloadLink = `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=application/pdf&access_token=${accessToken}`;
+        // ใช้ export endpoint สำหรับ Google Docs เป็น PDF
+        downloadUrl = `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=application/pdf`;
       } else {
-        // ใช้ webContentLink สำหรับไฟล์ทั่วไป
-        // หรือ fallback ไปใช้ alt=media endpoint ถ้า webContentLink ไม่มี
-        downloadLink = file.downloadUrl || `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&access_token=${accessToken}`;
+        // ใช้ alt=media endpoint สำหรับไฟล์ทั่วไป
+        downloadUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
       }
 
-      if (!downloadLink) {
-         toast({
-          title: "เกิดข้อผิดพลาด",
-          description: "ไม่พบลิงก์ดาวน์โหลดสำหรับไฟล์นี้",
+      // ดึงเนื้อหาไฟล์โดยตรงจาก Google Drive API
+      const response = await fetch(downloadUrl, {
+        headers: { 
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/pdf' // ระบุว่าเราต้องการ PDF
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        
+        // Check for insufficient scope error
+        if (response.status === 403 && errorText.includes('insufficient authentication scopes')) {
+          if (onInsufficientScopeError) {
+            await onInsufficientScopeError();
+            return;
+          }
+        }
+        
+        toast({
+          title: "เกิดข้อผิดพลาดในการดาวน์โหลด",
+          description: `ไม่สามารถดาวน์โหลดไฟล์ได้: ${response.statusText || response.status}`,
           variant: "destructive",
         });
         return;
       }
 
-      // เปิดลิงก์ดาวน์โหลดในแท็บใหม่ เพื่อให้เบราว์เซอร์จัดการการดาวน์โหลด
-      // สำหรับไฟล์ Google Native, การเปิดในแท็บใหม่จะทริกเกอร์การดาวน์โหลด PDF โดยตรง
-      window.open(downloadLink, '_blank');
+      // รับเนื้อหาไฟล์เป็น Blob
+      const fileBlob = await response.blob();
+      const blobUrl = URL.createObjectURL(fileBlob);
+
+      // สร้างลิงก์สำหรับดาวน์โหลด
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
 
       toast({
-        title: "กำลังเริ่มดาวน์โหลด",
-        description: `กำลังดาวน์โหลด ${file.name}`,
+        title: "ดาวน์โหลดสำเร็จ",
+        description: `ดาวน์โหลด ${file.name} เรียบร้อยแล้ว`,
       });
+
     } catch (error) {
-      console.error('Error preparing download link:', error);
       toast({
         title: "เกิดข้อผิดพลาด",
-        description: `ไม่สามารถเตรียมลิงก์ดาวน์โหลดได้: ${error instanceof Error ? error.message : String(error)}`,
+        description: `ไม่สามารถดาวน์โหลดไฟล์ได้: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive",
       });
     }
