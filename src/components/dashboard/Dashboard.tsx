@@ -891,17 +891,6 @@ export const Dashboard = () => {
     <AuthActionsProvider handleGoogleLogin={handleGoogleLogin}>
       <div className="min-h-screen bg-gray-50 transition-opacity duration-300">
         <Header 
-          onConfigDrive={() => {
-            if (user.role === 'Admin') {
-              setShowConfig(true);
-            } else {
-              toast({
-                title: "ไม่มีสิทธิ์",
-                description: "เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถตั้งค่าได้",
-                variant: "destructive",
-              });
-            }
-          }}
           onConnectDrive={handleConnectGoogleDrive}
           accessToken={accessToken}
         />

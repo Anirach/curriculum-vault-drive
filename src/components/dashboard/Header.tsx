@@ -1,17 +1,15 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { GraduationCap, LogOut, User } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { useToast } from '@/hooks/use-toast';
 import { userService } from '@/services/userService';
 
 export const Header = ({ 
-  onConfigDrive, 
   onConnectDrive,
   accessToken
 }: { 
-  onConfigDrive?: () => void;
   onConnectDrive?: () => Promise<void>;
   accessToken?: string | null;
 }) => {
@@ -70,11 +68,6 @@ export const Header = ({
           {user && (
             <>
               <div className="flex items-center space-x-4">
-                {user.role === 'Admin' && onConfigDrive && (
-                  <Button variant="outline" size="sm" onClick={onConfigDrive}>
-                    ตั้งค่า Drive
-                  </Button>
-                )}
                 {!accessToken && onConnectDrive && (
                   <Button variant="outline" size="sm" onClick={onConnectDrive}>
                     เชื่อมต่อ Google Drive
@@ -82,12 +75,23 @@ export const Header = ({
                 )}
                 <div className="flex items-center space-x-2">
                   <Avatar>
-                    <AvatarFallback>
-                      <User className="w-4 h-4" />
-                    </AvatarFallback>
+                    {user.picture ? (
+                      <AvatarImage src={user.picture} alt={user.name} />
+                    ) : (
+                      <AvatarFallback>
+                        <User className="w-4 h-4" />
+                      </AvatarFallback>
+                    )}
                   </Avatar>
                   <div className="hidden md:block">
-                    <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                      {user.role === 'Admin' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Admin
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500">{user.email}</p>
                   </div>
                 </div>
