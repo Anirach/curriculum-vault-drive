@@ -20,15 +20,18 @@ export const Header = ({
 
   const handleLogout = async () => {
     try {
-      // ลบข้อมูลจาก localStorage
+      // ลบเฉพาะ access token และข้อมูลผู้ใช้
       localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
       localStorage.removeItem('userEmail');
+      localStorage.removeItem('userName');
+      localStorage.removeItem('userPicture');
       localStorage.removeItem('userRole');
       localStorage.removeItem('clientId');
       localStorage.removeItem('clientSecret');
       localStorage.removeItem('driveUrl');
       localStorage.removeItem('currentUser');
+
+      // ไม่ลบ refresh token เพื่อให้สามารถ login ใหม่ได้โดยไม่ต้อง authenticate
 
       // ล้างข้อมูลจาก IndexedDB
       await userService.logout();
@@ -42,7 +45,7 @@ export const Header = ({
         description: "ขอบคุณที่ใช้งานระบบ",
       });
 
-      // redirect ไปที่หน้าแรก (ซึ่งจะแสดงหน้า login)
+      // redirect ไปที่หน้าแรก
       window.location.href = '/';
     } catch (error) {
       console.error('Error during logout:', error);

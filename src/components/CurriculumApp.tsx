@@ -45,6 +45,8 @@ const AppContent = () => {
       });
 
       if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Token refresh error:', errorData);
         throw new Error('Failed to refresh token');
       }
 
@@ -65,37 +67,116 @@ const AppContent = () => {
     const accessToken = localStorage.getItem('accessToken');
 
     if (!refreshToken) {
-      console.log('No refresh token found');
+      console.log('No refresh token found in localStorage');
       return null;
     }
 
     try {
-      // ถ้าไม่มี access token หรือ token หมดอายุ ให้ refresh
+      // ถ้าไม่มี access token ให้ refresh ทันที
       if (!accessToken) {
-        console.log('No access token, attempting to refresh...');
-        return await refreshAccessToken(refreshToken);
+        console.log('No access token found, attempting to refresh using refresh token...');
+        try {
+          const newAccessToken = await refreshAccessToken(refreshToken);
+          console.log('Successfully refreshed access token');
+          return newAccessToken;
+        } catch (error) {
+          console.error('Failed to refresh access token:', error);
+          // ถ้า refresh ไม่สำเร็จ ให้ลบ refresh token ด้วย
+          localStorage.removeItem('refreshToken');
+          return null;
+        }
       }
 
       // ตรวจสอบว่า token ยังใช้งานได้หรือไม่
-      const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      try {
+        console.log('Validating existing access token...');
+        const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
 
-      if (response.ok) {
-        return accessToken;
+        if (response.ok) {
+          console.log('Access token is still valid');
+          return accessToken;
+        }
+      } catch (error) {
+        console.log('Access token validation failed:', error);
       }
 
-      // ถ้า token หมดอายุ ให้ refresh
-      console.log('Access token expired, refreshing...');
-      return await refreshAccessToken(refreshToken);
+      // ถ้า token หมดอายุหรือไม่สามารถใช้งานได้ ให้ refresh
+      console.log('Access token is invalid, attempting to refresh...');
+      try {
+        const newAccessToken = await refreshAccessToken(refreshToken);
+        console.log('Successfully refreshed access token');
+        return newAccessToken;
+      } catch (error) {
+        console.error('Failed to refresh access token:', error);
+        // ถ้า refresh ไม่สำเร็จ ให้ลบ refresh token ด้วย
+        localStorage.removeItem('refreshToken');
+        return null;
+      }
     } catch (error) {
-      console.error('Error validating token:', error);
+      console.error('Error in validateAndRefreshToken:', error);
+      // ถ้าเกิดข้อผิดพลาด ให้ลบ token ทั้งหมด
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
       return null;
     }
   };
 
+  const checkAndSetUserFromToken = async () => {
+    try {
+      console.log('Checking and setting user from token...');
+      const validToken = await validateAndRefreshToken();
+      if (!validToken) {
+        console.log('No valid token available after validation');
+        return false;
+      }
+
+      console.log('Fetching user info with valid token...');
+      const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          Authorization: `Bearer ${validToken}`,
+        },
+      });
+
+      if (!userResponse.ok) {
+        const errorText = await userResponse.text();
+        console.error('Failed to fetch user info:', errorText);
+        return false;
+      }
+
+      const userData = await userResponse.json();
+      console.log('Successfully fetched user info:', userData.email);
+
+      const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
+      const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
+
+      const userInfo = {
+        email: userData.email,
+        name: userData.name,
+        picture: userData.picture,
+        role
+      };
+
+      setUser(userInfo);
+
+      // เก็บข้อมูลการ login
+      localStorage.setItem('userEmail', userData.email);
+      localStorage.setItem('userName', userData.name);
+      localStorage.setItem('userPicture', userData.picture);
+      localStorage.setItem('userRole', role);
+
+      console.log('User authenticated successfully:', userData.email);
+      return true;
+    } catch (error) {
+      console.error('Error in checkAndSetUserFromToken:', error);
+      return false;
+    }
+  };
+
+  // ตรวจสอบ token เมื่อ component โหลด
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -104,12 +185,14 @@ const AppContent = () => {
         const authType = location.state?.type;
 
         if (code) {
+          console.log('Processing authorization code from OAuth callback...');
           // จัดการ authorization code
           const settings = await userService.getGoogleDriveSettings();
           if (!settings?.clientId || !settings?.clientSecret) {
             throw new Error('Google OAuth settings not configured');
           }
 
+          console.log('Exchanging authorization code for tokens...');
           const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: {
@@ -125,16 +208,25 @@ const AppContent = () => {
           });
 
           if (!tokenResponse.ok) {
+            const errorData = await tokenResponse.json();
+            console.error('Token exchange error:', errorData);
             throw new Error('Failed to exchange code for tokens');
           }
 
           const tokenData = await tokenResponse.json();
+          console.log('Token exchange successful, storing tokens...');
+          
+          // เก็บ tokens
           localStorage.setItem('accessToken', tokenData.access_token);
           if (tokenData.refresh_token) {
+            console.log('Storing refresh token...');
             localStorage.setItem('refreshToken', tokenData.refresh_token);
+          } else {
+            console.log('No refresh token received from Google');
           }
 
           // ดึงข้อมูลผู้ใช้
+          console.log('Fetching user info with new access token...');
           const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
             headers: {
               Authorization: `Bearer ${tokenData.access_token}`,
@@ -146,16 +238,19 @@ const AppContent = () => {
           }
 
           const userData = await userResponse.json();
-          // กำหนด role ตาม email เท่านั้น ไม่สนใจโดเมน
+          console.log('Successfully fetched user info:', userData.email);
+
           const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
           const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
 
-          setUser({
+          const userInfo = {
             email: userData.email,
             name: userData.name,
             picture: userData.picture,
             role
-          });
+          };
+
+          setUser(userInfo);
 
           // เก็บข้อมูลการ login
           localStorage.setItem('userEmail', userData.email);
@@ -163,56 +258,45 @@ const AppContent = () => {
           localStorage.setItem('userPicture', userData.picture);
           localStorage.setItem('userRole', role);
 
+          console.log('User authenticated and data stored:', userData.email);
+
           // ถ้าเป็นการ login ปกติ ให้ไปที่ Dashboard
           if (authType === 'login') {
+            console.log('Navigating to dashboard after successful login...');
             navigate('/dashboard');
           }
         } else {
+          console.log('No authorization code, checking existing token...');
           // ถ้าไม่มี code ให้ตรวจสอบ token ที่มีอยู่
-          const validToken = await validateAndRefreshToken();
-          if (validToken) {
-            const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-              headers: {
-                Authorization: `Bearer ${validToken}`,
-              },
-            });
-
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-              const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
-              const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
-
-              setUser({
-                email: userData.email,
-                name: userData.name,
-                picture: userData.picture,
-                role
-              });
+          const isValid = await checkAndSetUserFromToken();
+          if (isValid) {
+            console.log('Valid token found, user is authenticated');
+            // ถ้า token ใช้งานได้ ให้ไปที่ Dashboard ถ้าอยู่ที่หน้า dashboard
+            if (location.pathname === '/dashboard') {
+              console.log('Navigating to dashboard with valid token...');
+              navigate('/dashboard');
             }
+          } else {
+            console.log('No valid token found, user needs to login');
           }
         }
       } catch (error) {
-        console.error('Error during Google authentication:', error);
-        toast({
-          title: "เกิดข้อผิดพลาด",
-          description: "ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง",
-          variant: "destructive",
-        });
+        console.error('Error during initialization:', error);
         // ลบข้อมูลการ login ที่ไม่ถูกต้อง
         localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        // ไม่ลบ refresh token เพื่อให้สามารถ login ใหม่ได้
         localStorage.removeItem('userEmail');
         localStorage.removeItem('userName');
         localStorage.removeItem('userPicture');
+        localStorage.removeItem('userRole');
       } finally {
         setIsLoading(false);
-        // รีเซ็ต isInitializing ทันทีหลังจากโหลดเสร็จ
         setIsInitializing(false);
       }
     };
 
     initializeApp();
-  }, [location.state, setUser, navigate, toast, setIsLoading, validateAndRefreshToken]);
+  }, [location.state, setUser, navigate, toast, setIsLoading]);
 
   useEffect(() => {
     if (user) {
@@ -224,48 +308,18 @@ const AppContent = () => {
 
   const handleGoogleLogin = async () => {
     try {
-      // ตรวจสอบว่ามี refresh token อยู่หรือไม่
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        try {
-          // ลองใช้ refresh token ก่อน
-          const newAccessToken = await refreshAccessToken(refreshToken);
-          if (newAccessToken) {
-            // ถ้าสำเร็จ ให้ดึงข้อมูลผู้ใช้
-            const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-              headers: {
-                Authorization: `Bearer ${newAccessToken}`,
-              },
-            });
-
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-              const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
-              const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
-
-              setUser({
-                email: userData.email,
-                name: userData.name,
-                picture: userData.picture,
-                role
-              });
-
-              // เก็บข้อมูลการ login
-              localStorage.setItem('userEmail', userData.email);
-              localStorage.setItem('userName', userData.name);
-              localStorage.setItem('userPicture', userData.picture);
-              localStorage.setItem('userRole', role);
-
-              navigate('/dashboard');
-              return;
-            }
-          }
-        } catch (error) {
-          console.log('Refresh token failed, proceeding with normal login');
-        }
+      console.log('Starting Google login process...');
+      // ตรวจสอบ token ที่มีอยู่ก่อน
+      const isValid = await checkAndSetUserFromToken();
+      if (isValid) {
+        console.log('Valid token found, navigating to dashboard...');
+        // ถ้า token ใช้งานได้ ให้ไปที่ Dashboard
+        navigate('/dashboard');
+        return;
       }
 
-      // ถ้าไม่มี refresh token หรือ refresh ไม่สำเร็จ ให้ทำ OAuth ตามปกติ
+      console.log('No valid token, initiating OAuth flow...');
+      // ถ้า token ไม่สามารถใช้งานได้ ให้ทำ OAuth ตามปกติ
       const settings = await userService.getGoogleDriveSettings();
       if (!settings || !settings.clientId || !settings.clientSecret) {
         toast({
@@ -281,6 +335,7 @@ const AppContent = () => {
       const scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify({ type: 'login' }))}`;
 
+      console.log('Redirecting to Google OAuth...');
       window.location.href = authUrl;
     } catch (error) {
       console.error('Error during Google login:', error);
@@ -345,11 +400,11 @@ const AppContent = () => {
   }
 
   // ถ้า authenticate แล้วและมี user ให้แสดง Dashboard
-  if (isAuthenticated && user) {
+  if (isAuthenticated && user && location.pathname === '/dashboard') {
     return <DashboardContent />;
   }
 
-  // ถ้ายังไม่ได้ authenticate หรือไม่มี user ให้แสดง Landing Page
+  // ถ้ายังไม่ได้ authenticate หรือไม่มี user หรือไม่ได้อยู่ที่ path /dashboard ให้แสดง Landing Page
   return <LandingPageContent />;
 };
 
