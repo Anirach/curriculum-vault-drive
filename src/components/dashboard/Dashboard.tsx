@@ -69,6 +69,16 @@ export const Dashboard = () => {
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
+  // Debug useEffect to monitor rootFolders state
+  useEffect(() => {
+    console.log('=== FileBrowser State Debug ===');
+    console.log('rootFolders:', rootFolders.length, 'items');
+    console.log('rootFolders content:', rootFolders.map(f => ({ name: f.name, type: f.type, id: f.id })));
+    console.log('currentPath:', currentPath);
+    console.log('accessToken available:', !!accessToken);
+    console.log('user:', user?.email || 'none');
+  }, [rootFolders, currentPath, accessToken, user]);
+
   const handleTokenExpired = useCallback(() => {
     console.log('Handling token expired: Clearing session...');
     setAccessToken(null);
@@ -245,6 +255,13 @@ export const Dashboard = () => {
     console.log('Handling authorization code...');
     try {
       console.log('Processing authorization code...');
+      
+      // Get settings first to ensure we have client credentials
+      const settings = await userService.getGoogleDriveSettings();
+      if (!settings?.clientId || !settings?.clientSecret) {
+        throw new Error('Missing OAuth client credentials');
+      }
+
       const response = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
@@ -252,9 +269,9 @@ export const Dashboard = () => {
         },
         body: new URLSearchParams({
           code,
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uri: window.location.origin,
+          client_id: settings.clientId,
+          client_secret: settings.clientSecret,
+          redirect_uri: `${window.location.origin}/auth/callback`,
           grant_type: 'authorization_code',
         }),
       });
@@ -312,30 +329,70 @@ export const Dashboard = () => {
         description: `ยินดีต้อนรับ ${user.name} (${user.role})`,
       });
 
-      // After successful authentication, automatically load Google Drive content
-      // Use setTimeout to ensure state updates complete before calling fetchFiles
-      setTimeout(async () => {
-        try {
-          const settings = await userService.getGoogleDriveSettings();
-          if (settings?.driveUrl) {
-            const match = settings.driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
-            const folderId = match ? match[1] : null;
-            if (folderId) {
-              console.log('Auto-loading Google Drive folder after authentication:', folderId);
-              // Set the drive URL state so it's available for the fetch
-              setDriveUrl(settings.driveUrl);
-              setInputUrl(settings.driveUrl);
-              // The useEffect watching driveUrl and accessToken will trigger fetchFiles
+      // Enhanced auto-load with immediate file fetching
+      console.log('=== AUTO-LOAD AFTER AUTH ===');
+      if (settings?.driveUrl) {
+        const match = settings.driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
+        const folderId = match ? match[1] : null;
+        
+        console.log('Drive URL parsing:', { 
+          driveUrl: settings.driveUrl, 
+          folderId,
+          hasAccessToken: !!data.access_token 
+        });
+        
+        if (folderId) {
+          console.log('Setting drive URL and forcing immediate file fetch...');
+          setDriveUrl(settings.driveUrl);
+          setInputUrl(settings.driveUrl);
+          
+          // Force immediate file fetch with the new token
+          try {
+            const driveResponse = await fetch(
+              `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)`,
+              { headers: { Authorization: `Bearer ${data.access_token}` } }
+            );
+
+            if (driveResponse.ok) {
+              const driveData = await driveResponse.json();
+              console.log('✅ Immediate fetch successful:', driveData.files?.length, 'files found');
+              
+              if (driveData.files && driveData.files.length > 0) {
+                const items: FileItem[] = driveData.files.map((item: GoogleDriveFile) => ({
+                  id: item.id,
+                  name: item.name,
+                  type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file',
+                  path: [],
+                  url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
+                  downloadUrl: item.webContentLink,
+                  size: item.size,
+                  lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
+                  parents: item.parents,
+                  mimeType: item.mimeType,
+                }));
+                
+                console.log('🗂️ Setting files in rootFolders:', items.map(f => f.name));
+                setRootFolders(items);
+              } else {
+                console.log('📁 Folder is empty');
+                setRootFolders([]);
+              }
             } else {
-              console.warn('Invalid drive URL format in environment settings:', settings.driveUrl);
+              console.error('❌ Immediate fetch failed:', driveResponse.status, await driveResponse.text());
+              setRootFolders([]);
             }
-          } else {
-            console.log('No default drive URL configured');
+          } catch (fetchError) {
+            console.error('❌ Error in immediate file fetch:', fetchError);
+            setRootFolders([]);
           }
-        } catch (error) {
-          console.error('Error auto-loading drive content after authentication:', error);
+        } else {
+          console.warn('❌ Invalid drive URL format:', settings.driveUrl);
+          setRootFolders([]);
         }
-      }, 100);
+      } else {
+        console.log('ℹ️ No default drive URL configured');
+        setRootFolders([]);
+      }
 
     } catch (error) {
       console.error('Error during OAuth flow:', error);
@@ -346,7 +403,7 @@ export const Dashboard = () => {
       });
       handleTokenExpired();
     }
-  }, [clientId, clientSecret, handleTokenExpired, setUser, toast, setUserEmail, setUserRole]);
+  }, [handleTokenExpired, setUser, toast, setUserEmail, setUserRole]);
 
   const handleSaveDriveUrl = async () => {
     if (!inputUrl) {
@@ -553,7 +610,7 @@ export const Dashboard = () => {
     try {
       console.log('🔄 Fetching files from Google Drive...', { folderId: targetFolderId });
       const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q='${targetFolderId}' in parents and trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink)`,
+        `https://www.googleapis.com/drive/v3/files?q='${targetFolderId}' in parents and trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 

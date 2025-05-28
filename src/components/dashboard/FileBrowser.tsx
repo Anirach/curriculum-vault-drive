@@ -279,6 +279,13 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         return;
       }
 
+      // If we're at the root level and have rootFolders from Dashboard, use them
+      if (currentPath.length === 0 && rootFolders && rootFolders.length > 0) {
+        console.log('🗂️ Using rootFolders from Dashboard:', rootFolders.length, 'files');
+        setFiles(rootFolders);
+        return;
+      }
+
       const match = driveUrl?.match(/folders\/([a-zA-Z0-9_-]+)/);
       const rootFolderId = match ? match[1] : null;
       const targetFolderId = currentPath.length > 0 ? currentPath[currentPath.length - 1] : rootFolderId;
@@ -303,7 +310,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     };
 
     loadFiles();
-  }, [currentPath, accessToken, driveUrl, searchQuery, fetchDirectChildren]); // ลบ files ออกจาก dependencies
+  }, [currentPath, accessToken, driveUrl, searchQuery, fetchDirectChildren, rootFolders]); // Add rootFolders to dependencies
 
   // แยก useEffect สำหรับการค้นหา
   useEffect(() => {
@@ -1191,13 +1198,14 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
           </div>
         ) : (
           <div className="space-y-2">
-            {searchResults?.length === 0 ? (
+            {/* Show search results if searching, otherwise show regular files */}
+            {(searchResults !== null ? searchResults : files).length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Folder className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 <p>{searchQuery !== '' ? 'ไม่พบผลลัพธ์การค้นหา' : (currentPath.length === 0 ? 'ไม่พบข้อมูลใน Root Folder นี้' : 'ไม่พบข้อมูลในโฟลเดอร์นี้')}</p>
               </div>
             ) : (
-              searchResults?.map((file) => (
+              (searchResults !== null ? searchResults : files).map((file) => (
                 <div key={file.id}>
                   {file.type === 'folder' ? (
                     <ContextMenu>
