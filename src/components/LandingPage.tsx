@@ -63,11 +63,11 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
               <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
                 <Eye className="w-6 h-6 text-blue-600" />
               </div>
-              <CardTitle className="text-lg mb-2">เข้าถึงสาธารณะ</CardTitle>
+              <CardTitle className="text-lg mb-2">การใช้งาน</CardTitle>
             </CardHeader>
             <CardContent>
               <CardDescription className="text-gray-600 text-sm">
-                ดูไฟล์ PDF และเอกสารจากโฟลเดอร์สาธารณะโดยไม่ต้องเข้าสู่ระบบ
+                ดูไฟล์ และเอกสารจากโฟลเดอร์
               </CardDescription>
             </CardContent>
           </Card>
@@ -97,7 +97,7 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
             <CardContent>
               <CardDescription className="text-gray-600 text-sm">
                 ระบบควบคุมสิทธิ์การเข้าถึงที่ปลอดภัย 
-                พร้อมการยืนยันตัวตนผ่าน Google OAuth
+                พร้อมการยืนยันตัวตนผ่าน Google Authen
               </CardDescription>
             </CardContent>
           </Card>
@@ -110,10 +110,10 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
               <CardTitle className="text-lg mb-2">การจัดการผู้ใช้</CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-gray-600 text-sm">
-                ระบบจัดการผู้ใช้แบบหลายระดับ 
-                สำหรับผู้ดูแลระบบและผู้ใช้ทั่วไป
-              </CardDescription>
+                <CardDescription className="text-gray-600 text-sm">
+                ระบบจัดการผู้ใช้และสิทธิ์การเข้าถึง <br />
+                ผ่านการยีนยันตัวตน
+                </CardDescription>
             </CardContent>
           </Card>
         </div>
@@ -127,7 +127,7 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
           {/* Authenticated Access Workflow */}
           <div>
             <h3 className="text-2xl font-semibold text-center text-green-600 mb-8">
-              🔒 การเข้าถึงด้วยการรับรอง
+              🔒 การเข้าถึงโดยการยืนยันตัวตน
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="text-center">
@@ -137,17 +137,16 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
                 <h4 className="text-xl font-semibold mb-3">เข้าสู่ระบบ</h4>
                 <p className="text-gray-600">
                   เข้าสู่ระบบด้วย Google Account 
-                  ที่ได้รับสิทธิ์การเข้าถึง
+                  
                 </p>
               </div>
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-white text-2xl font-bold">
                   2
                 </div>
-                <h4 className="text-xl font-semibold mb-3">จัดการเอกสาร</h4>
+                <h4 className="text-xl font-semibold mb-3">สิทธิ์ทั่วไป</h4>
                 <p className="text-gray-600">
-                  เข้าถึงเอกสารส่วนตัว อัปโหลด
-                  และจัดการไฟล์ในระบบ
+                  เข้าถึงเอกสาร และ ดาวน์โหลดไฟล์
                 </p>
               </div>
               <div className="text-center">
@@ -156,8 +155,8 @@ export const LandingPage = ({ onLoginClick }: LandingPageProps) => {
                 </div>
                 <h4 className="text-xl font-semibold mb-3">สิทธิ์เต็มรูปแบบ</h4>
                 <p className="text-gray-600">
-                  แก้ไข ลบ แชร์ไฟล์ และ
-                  จัดการระบบตามสิทธิ์ที่ได้รับ
+                  แก้ไข ลบ แชร์ไฟล์ สร้างโฟลเดอร์และ
+                  จัดการระบบ
                 </p>
               </div>
             </div>
