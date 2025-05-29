@@ -300,7 +300,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     };
 
     loadFiles();
-  }, [currentPath, accessToken, driveUrl, searchQuery, fetchDirectChildren, rootFolders]); // Add rootFolders to dependencies
+  }, [currentPath, accessToken, driveUrl, searchQuery, fetchDirectChildren, rootFolders, refreshTrigger]); // Add refreshTrigger to dependencies
 
   // แยก useEffect สำหรับการค้นหา
   useEffect(() => {

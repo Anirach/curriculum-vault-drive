@@ -320,7 +320,6 @@ export const Dashboard = () => {
 
       // Determine the display name - use actual name from Google API
       const displayName = userData.name && userData.name.trim() ? userData.name.trim() : 'Anirach Mingkhwan';
-      console.log('Dashboard using display name:', displayName);
 
       const user = {
         id: userData.id || 'oauth-user',

@@ -138,14 +138,12 @@ const AppContent = () => {
       }
 
       const userData = await userResponse.json();
-      console.log('Google userinfo API response:', userData);
 
       const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
       const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
 
       // Determine the display name - use actual name from Google API
       const displayName = userData.name && userData.name.trim() ? userData.name.trim() : 'Anirach Mingkhwan';
-      console.log('Using display name:', displayName);
 
       const userInfo = {
         email: userData.email,
@@ -181,7 +179,6 @@ const AppContent = () => {
         
         // Clear any old cached names that are not the full name
         if (userName && (userName === 'Anirach.M' || userName === 'anirach.m' || userName.includes('A.M') || userName.includes('anirach.m'))) {
-          console.log('Clearing old cached userName:', userName);
           localStorage.removeItem('userName');
           localStorage.removeItem('currentUser'); // Also clear currentUser to force refresh
         }
@@ -190,7 +187,6 @@ const AppContent = () => {
           try {
             const userData = JSON.parse(currentUser);
             if (userData.name && (userData.name === 'Anirach.M' || userData.name === 'anirach.m' || userData.name.includes('A.M') || userData.name.includes('anirach.m'))) {
-              console.log('Clearing old cached currentUser with name:', userData.name);
               localStorage.removeItem('currentUser');
               localStorage.removeItem('userName');
             }
@@ -250,14 +246,12 @@ const AppContent = () => {
           }
           
           const userData = await userResponse.json();
-          console.log('Google userinfo API response (initializeApp):', userData);
 
           const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
           const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
 
           // Determine the display name - use actual name from Google API
           const displayName = userData.name && userData.name.trim() ? userData.name.trim() : 'Anirach Mingkhwan';
-          console.log('Using display name:', displayName);
 
           const userInfo = {
             email: userData.email,
