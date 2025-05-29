@@ -12,6 +12,7 @@ import { UserRole } from '@/types/user';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { encryptedStorage } from '@/services/encryptedStorage';
 
 // Helper function to sort files: folders first, then files, both in ascending alphabetical order
 const sortFiles = (files: FileItem[]): FileItem[] => {
@@ -140,7 +141,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   const [searchResults, setSearchResults] = useState<FileItem[] | null>(null);
   const [loadingSearch, setLoadingSearch] = useState(false);
 
-  const driveUrl = localStorage.getItem('driveUrl');
+  const { driveUrl } = encryptedStorage.getOAuthSettings();
 
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<FileItem | null>(null);
@@ -401,9 +402,9 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
   const getParentIdForNewFolder = (): string | undefined => {
     if (currentPath.length === 0) {
-      const driveUrl = localStorage.getItem('driveUrl');
+      const { driveUrl } = encryptedStorage.getOAuthSettings();
       if (!driveUrl) {
-        console.error('getParentIdForNewFolder: driveUrl not found in localStorage.');
+        console.error('getParentIdForNewFolder: driveUrl not found in encrypted storage.');
         return undefined;
       }
       const match = driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);

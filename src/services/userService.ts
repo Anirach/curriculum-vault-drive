@@ -1,6 +1,7 @@
 import { User, UserRole } from '@/types/user';
 // import { userQueries, settingsQueries } from './database'; // ลบ import นี้
 // import { getDatabase } from './database'; // ลบ import นี้
+import { encryptedStorage } from './encryptedStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -32,28 +33,20 @@ export const userService = {
   async logout(): Promise<void> {
     // ล้าง user จาก localStorage
     localStorage.removeItem('currentUser');
-    // ลบเฉพาะ access token และข้อมูลผู้ใช้
-    localStorage.removeItem('accessToken');
-    // ไม่ลบ refresh token เพื่อให้สามารถ login ใหม่ได้โดยไม่ต้อง authenticate
-    // localStorage.removeItem('refreshToken'); // ลบบรรทัดนี้ออก
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('clientId');
-    localStorage.removeItem('clientSecret');
-    localStorage.removeItem('driveUrl');
+    
+    // ใช้ encrypted storage ล้างข้อมูล sensitive
+    encryptedStorage.clearUserData();
   },
 
   // Google Drive settings
   async getGoogleDriveSettings() {
-    // ดึงการตั้งค่าจาก localStorage หรือใช้ค่าเริ่มต้น
-    const clientId = localStorage.getItem('clientId') || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientId;
-    const clientSecret = localStorage.getItem('clientSecret') || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientSecret;
-    const driveUrl = localStorage.getItem('driveUrl') || DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl;
-
+    // ดึงการตั้งค่าจาก encrypted storage หรือใช้ค่าเริ่มต้น
+    const { clientId, clientSecret, driveUrl } = encryptedStorage.getOAuthSettings();
+    
     return {
-      clientId,
-      clientSecret,
-      driveUrl
+      clientId: clientId || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientId,
+      clientSecret: clientSecret || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientSecret,
+      driveUrl: driveUrl || DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl
     };
   },
 
@@ -62,9 +55,7 @@ export const userService = {
     clientSecret: string;
     driveUrl: string;
   }) {
-    // บันทึกการตั้งค่าลง localStorage
-    localStorage.setItem('clientId', settings.clientId);
-    localStorage.setItem('clientSecret', settings.clientSecret);
-    localStorage.setItem('driveUrl', settings.driveUrl);
+    // บันทึกการตั้งค่าลง encrypted storage
+    encryptedStorage.setOAuthSettings(settings.clientId, settings.clientSecret, settings.driveUrl);
   },
 }; 

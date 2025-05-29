@@ -11,6 +11,7 @@ import { userService } from '@/services/userService';
 import { UserRole } from '@/types/user';
 import { AuthActionsProvider } from '@/contexts/AuthActionsContext';
 import { Label } from '@/components/ui/label';
+import { encryptedStorage, SENSITIVE_KEYS, EncryptedStorage } from '@/services/encryptedStorage';
 
 export interface FileItem {
   id: string;
@@ -90,19 +91,12 @@ export const Dashboard = () => {
   const handleTokenExpired = useCallback(() => {
     setIsLoggingOut(true);
     
-    // ล้างข้อมูลทั้งหมดใน localStorage
-    const keysToRemove = [
-      'accessToken',
-      'refreshToken',
-      'userEmail',
-      'userRole',
-      'currentUser',
-      'clientId',
-      'clientSecret',
-      'driveUrl'
-    ];
+    // ล้างข้อมูลทั้งหมดใน encrypted storage และ localStorage
+    encryptedStorage.clearUserData();
     
-    keysToRemove.forEach(key => localStorage.removeItem(key));
+    // ล้างข้อมูลที่ไม่ sensitive ใน localStorage
+    const nonSensitiveKeys = ['returnPath', 'currentUser'];
+    nonSensitiveKeys.forEach(key => localStorage.removeItem(key));
     
     // รีเซ็ต state ทั้งหมด
     setAccessToken(null);
@@ -150,10 +144,9 @@ export const Dashboard = () => {
       }
 
       setAccessToken(data.access_token);
-      localStorage.setItem('accessToken', data.access_token);
+      encryptedStorage.setTokens(data.access_token, data.refresh_token);
       if (data.refresh_token) {
          setRefreshToken(data.refresh_token);
-         localStorage.setItem('refreshToken', data.refresh_token);
       }
       return data.access_token;
 
@@ -187,13 +180,14 @@ export const Dashboard = () => {
             setUser({ ...user, role: determinedRole as UserRole });
           } else if (!user && email) {
             // Only create a new user if no user exists - let CurriculumApp handle user creation with full name
-            const storedUserName = localStorage.getItem('userName');
-            const displayName = storedUserName || 'Anirach Mingkhwan'; // Use stored name or fallback
+            const userData = encryptedStorage.getUserData();
+            const displayName = userData.name || 'Anirach Mingkhwan'; // Use stored name or fallback
             
             const newUser = {
               id: 'oauth-user',
               email: email,
               name: displayName,
+              picture: (userData.picture && userData.picture !== 'null' && userData.picture !== 'undefined' && userData.picture !== '') ? userData.picture : undefined,
               role: determinedRole as UserRole,
               createdAt: new Date(),
               updatedAt: new Date()
@@ -294,11 +288,10 @@ export const Dashboard = () => {
       }
 
       setAccessToken(data.access_token);
-      localStorage.setItem('accessToken', data.access_token);
+      encryptedStorage.setTokens(data.access_token, data.refresh_token);
 
       if (data.refresh_token) {
         setRefreshToken(data.refresh_token);
-        localStorage.setItem('refreshToken', data.refresh_token);
       }
 
       const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -313,7 +306,6 @@ export const Dashboard = () => {
       console.log('Google userinfo API response (Dashboard):', userData);
       const email = userData.email;
       setUserEmail(email);
-      localStorage.setItem('userEmail', email);
 
       const determinedRole = adminEmails.includes(email.toLowerCase()) ? 'Admin' : 'Viewer';
       setUserRole(determinedRole as UserRole);
@@ -333,8 +325,7 @@ export const Dashboard = () => {
 
       setUser(user);
       localStorage.setItem('currentUser', JSON.stringify(user));
-      localStorage.setItem('userName', displayName); // Store the correct name
-      localStorage.setItem('userRole', determinedRole);
+      encryptedStorage.setUserData(email, displayName, userData.picture || '', determinedRole);
 
       toast({
         title: "เข้าสู่ระบบสำเร็จ",
@@ -434,7 +425,7 @@ export const Dashboard = () => {
       await userService.setGoogleDriveSettings(settings);
 
       setDriveUrl(inputUrl);
-      localStorage.setItem('driveUrl', inputUrl);
+      encryptedStorage.setOAuthSettings(clientId, clientSecret, inputUrl);
 
       if (accessToken) {
         const folderId = match[1];
@@ -723,19 +714,23 @@ export const Dashboard = () => {
         if (settings) {
           if (settings.clientId) {
             setClientId(settings.clientId);
-            localStorage.setItem('clientId', settings.clientId);
           }
           if (settings.clientSecret) {
             setClientSecret(settings.clientSecret);
-            localStorage.setItem('clientSecret', settings.clientSecret);
           }
           if (settings.driveUrl) {
             setDriveUrl(settings.driveUrl);
             setInputUrl(settings.driveUrl);
-            localStorage.setItem('driveUrl', settings.driveUrl);
             
-            const storedAccessToken = localStorage.getItem('accessToken');
-            if (storedAccessToken) {
+            // Store all OAuth settings in encrypted storage
+            encryptedStorage.setOAuthSettings(
+              settings.clientId || clientId, 
+              settings.clientSecret || clientSecret, 
+              settings.driveUrl
+            );
+            
+            const { accessToken } = encryptedStorage.getTokens();
+            if (accessToken) {
               const match = settings.driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
               const folderId = match ? match[1] : null;
               if (folderId) {
@@ -756,17 +751,15 @@ export const Dashboard = () => {
       }
     };
     loadSettings();
-  }, [toast, fetchFiles]);
+  }, [toast, fetchFiles, clientId, clientSecret]);
 
   useEffect(() => {
     const loadUserSessionAndHandleOAuth = async () => {
       try {
-        const storedEmail = localStorage.getItem('userEmail');
-        const storedAccessToken = localStorage.getItem('accessToken');
-        const storedRefreshToken = localStorage.getItem('refreshToken');
-        const storedClientId = localStorage.getItem('clientId');
-        const storedClientSecret = localStorage.getItem('clientSecret');
-        const storedDriveUrl = localStorage.getItem('driveUrl');
+        // Get data from encrypted storage
+        const { accessToken: storedAccessToken, refreshToken: storedRefreshToken } = encryptedStorage.getTokens();
+        const { email: storedEmail } = encryptedStorage.getUserData();
+        const { clientId: storedClientId, clientSecret: storedClientSecret, driveUrl: storedDriveUrl } = encryptedStorage.getOAuthSettings();
 
         if (!clientId && storedClientId) setClientId(storedClientId);
         if (!clientSecret && storedClientSecret) setClientSecret(storedClientSecret);
@@ -843,7 +836,8 @@ export const Dashboard = () => {
             
             setDriveUrl(settings.driveUrl);
             setInputUrl(settings.driveUrl);
-            localStorage.setItem('driveUrl', settings.driveUrl);
+            // Store driveUrl in encrypted storage instead of localStorage
+            encryptedStorage.setOAuthSettings(clientId, clientSecret, settings.driveUrl);
             
             const match = settings.driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
             const folderId = match ? match[1] : null;
@@ -858,7 +852,7 @@ export const Dashboard = () => {
     };
 
     autoLoadDriveUrlFromEnv();
-  }, [accessToken, driveUrl, fetchFiles]);
+  }, [accessToken, driveUrl, fetchFiles, clientId, clientSecret]);
 
   const handlePathChange = useCallback((path: string[]) => {
     setCurrentPath(path);

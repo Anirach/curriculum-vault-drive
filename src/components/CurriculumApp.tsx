@@ -7,6 +7,7 @@ import { userService } from '@/services/userService';
 import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/types/user';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { encryptedStorage, SENSITIVE_KEYS, EncryptedStorage } from '@/services/encryptedStorage';
 
 // เพิ่ม interface สำหรับ User
 interface User {
@@ -51,20 +52,18 @@ const AppContent = () => {
       }
 
       const data = await response.json();
-      localStorage.setItem('accessToken', data.access_token);
+      encryptedStorage.setTokens(data.access_token);
       return data.access_token;
     } catch (error) {
       console.error('Error refreshing token:', error);
       // ถ้า refresh token ไม่สำเร็จ ให้ลบ token ทั้งหมด
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      encryptedStorage.clearUserData();
       throw error;
     }
   }, []);
 
   const validateAndRefreshToken = useCallback(async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    const accessToken = localStorage.getItem('accessToken');
+    const { refreshToken, accessToken } = encryptedStorage.getTokens();
 
     if (!refreshToken) {
       return null;
@@ -78,8 +77,8 @@ const AppContent = () => {
           return newAccessToken;
         } catch (error) {
           console.error('Failed to refresh access token:', error);
-          // ถ้า refresh ไม่สำเร็จ ให้ลบ refresh token ด้วย
-          localStorage.removeItem('refreshToken');
+          // ถ้า refresh ไม่สำเร็จ ให้ลบ token ทั้งหมด
+          encryptedStorage.clearUserData();
           return null;
         }
       }
@@ -105,15 +104,14 @@ const AppContent = () => {
         return newAccessToken;
       } catch (error) {
         console.error('Failed to refresh access token:', error);
-        // ถ้า refresh ไม่สำเร็จ ให้ลบ refresh token ด้วย
-        localStorage.removeItem('refreshToken');
+        // ถ้า refresh ไม่สำเร็จ ให้ลบ token ทั้งหมด
+        encryptedStorage.clearUserData();
         return null;
       }
     } catch (error) {
       console.error('Error in validateAndRefreshToken:', error);
       // ถ้าเกิดข้อผิดพลาด ให้ลบ token ทั้งหมด
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      encryptedStorage.clearUserData();
       return null;
     }
   }, [refreshAccessToken]);
@@ -155,10 +153,7 @@ const AppContent = () => {
       setUser(userInfo);
 
       // เก็บข้อมูลการ login
-      localStorage.setItem('userEmail', userData.email);
-      localStorage.setItem('userName', userInfo.name);
-      localStorage.setItem('userPicture', userData.picture);
-      localStorage.setItem('userRole', role);
+      encryptedStorage.setUserData(userData.email, userInfo.name, userData.picture || '', role);
 
       return true;
     } catch (error) {
@@ -173,27 +168,15 @@ const AppContent = () => {
       try {
         setIsInitializing(true);
         
+        // Migrate existing localStorage data to encrypted storage
+        EncryptedStorage.migrateExistingData(SENSITIVE_KEYS);
+        
         // Clear old cached user data to ensure new name logic takes effect
-        const currentUser = localStorage.getItem('currentUser');
-        const userName = localStorage.getItem('userName');
+        const userData = encryptedStorage.getUserData();
         
         // Clear any old cached names that are not the full name
-        if (userName && (userName === 'Anirach.M' || userName === 'anirach.m' || userName.includes('A.M') || userName.includes('anirach.m'))) {
-          localStorage.removeItem('userName');
-          localStorage.removeItem('currentUser'); // Also clear currentUser to force refresh
-        }
-        
-        if (currentUser) {
-          try {
-            const userData = JSON.parse(currentUser);
-            if (userData.name && (userData.name === 'Anirach.M' || userData.name === 'anirach.m' || userData.name.includes('A.M') || userData.name.includes('anirach.m'))) {
-              localStorage.removeItem('currentUser');
-              localStorage.removeItem('userName');
-            }
-          } catch (error) {
-            localStorage.removeItem('currentUser');
-            localStorage.removeItem('userName');
-          }
+        if (userData.name && (userData.name === 'Anirach.M' || userData.name === 'anirach.m' || userData.name.includes('A.M') || userData.name.includes('anirach.m'))) {
+          encryptedStorage.clearUserData();
         }
         
         const code = location.state?.code;
@@ -229,10 +212,7 @@ const AppContent = () => {
           const tokenData = await tokenResponse.json();
           
           // เก็บ tokens
-          localStorage.setItem('accessToken', tokenData.access_token);
-          if (tokenData.refresh_token) {
-            localStorage.setItem('refreshToken', tokenData.refresh_token);
-          }
+          encryptedStorage.setTokens(tokenData.access_token, tokenData.refresh_token);
 
           // ดึงข้อมูลผู้ใช้
           const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -263,10 +243,7 @@ const AppContent = () => {
           setUser(userInfo);
 
           // เก็บข้อมูลการ login
-          localStorage.setItem('userEmail', userData.email);
-          localStorage.setItem('userName', userInfo.name);
-          localStorage.setItem('userPicture', userData.picture);
-          localStorage.setItem('userRole', role);
+          encryptedStorage.setUserData(userData.email, userInfo.name, userData.picture || '', role);
 
           // ถ้าเป็นการ login ปกติ ให้ไปที่ Dashboard
           if (authType === 'login') {
@@ -285,12 +262,7 @@ const AppContent = () => {
       } catch (error) {
         console.error('Error during initialization:', error);
         // ลบข้อมูลการ login ที่ไม่ถูกต้อง
-        localStorage.removeItem('accessToken');
-        // ไม่ลบ refresh token เพื่อให้สามารถ login ใหม่ได้
-        localStorage.removeItem('userEmail');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userPicture');
-        localStorage.removeItem('userRole');
+        encryptedStorage.clearUserData();
       } finally {
         setIsLoading(false);
         setIsInitializing(false);

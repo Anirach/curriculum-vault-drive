@@ -5,6 +5,7 @@ import { GraduationCap, LogOut, User } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { useToast } from '@/hooks/use-toast';
 import { userService } from '@/services/userService';
+import { encryptedStorage } from '@/services/encryptedStorage';
 
 export const Header = ({ 
   onConnectDrive,
@@ -18,16 +19,8 @@ export const Header = ({
 
   const handleLogout = async () => {
     try {
-      // ลบเฉพาะ access token และข้อมูลผู้ใช้
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('userEmail');
-      localStorage.removeItem('userName');
-      localStorage.removeItem('userPicture');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('clientId');
-      localStorage.removeItem('clientSecret');
-      localStorage.removeItem('driveUrl');
-      localStorage.removeItem('currentUser');
+      // Use encrypted storage to clear all sensitive data
+      encryptedStorage.clearUserData();
 
       // ไม่ลบ refresh token เพื่อให้สามารถ login ใหม่ได้โดยไม่ต้อง authenticate
 
@@ -80,13 +73,20 @@ export const Header = ({
                     </span>
                   )}
                   <Avatar>
-                    {user.picture ? (
-                      <AvatarImage src={user.picture} alt={user.name} />
-                    ) : (
-                      <AvatarFallback>
-                        <User className="w-4 h-4" />
-                      </AvatarFallback>
-                    )}
+                    <AvatarImage 
+                      src={user.picture?.replace(/=s\d+-c$/, '') || user.picture}
+                      alt={user.name}
+                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
+                    />
+                    <AvatarFallback className="bg-blue-100 text-blue-600 font-medium">
+                      {user.name
+                        .split(' ')
+                        .map(name => name.charAt(0))
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2)}
+                    </AvatarFallback>
                   </Avatar>
                   <div className="hidden md:block">
                     <div className="flex items-center gap-2">
