@@ -127,8 +127,17 @@ export const encryptedStorage = {
     driveUrl: EncryptedStorage.getItem('driveUrl')
   }),
 
-  // Clear all sensitive data
-  clearUserData: () => {
-    SENSITIVE_KEYS.forEach(key => EncryptedStorage.removeItem(key));
+  // Clear all sensitive data, with option to keep refresh token for soft logout
+  clearUserData: (options?: { keepRefreshToken?: boolean }) => {
+    if (options?.keepRefreshToken) {
+      const refreshToken = EncryptedStorage.getItem('refreshToken');
+      SENSITIVE_KEYS.forEach(key => {
+        if (key !== 'refreshToken') EncryptedStorage.removeItem(key);
+      });
+      // Restore refresh token if it existed
+      if (refreshToken) EncryptedStorage.setItem('refreshToken', refreshToken);
+    } else {
+      SENSITIVE_KEYS.forEach(key => EncryptedStorage.removeItem(key));
+    }
   }
 };

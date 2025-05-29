@@ -19,24 +19,16 @@ export const Header = ({
 
   const handleLogout = async () => {
     try {
-      // Use encrypted storage to clear all sensitive data
-      encryptedStorage.clearUserData();
-
-      // ไม่ลบ refresh token เพื่อให้สามารถ login ใหม่ได้โดยไม่ต้อง authenticate
+      // Soft logout: clear all sensitive data except refresh token
+      encryptedStorage.clearUserData({ keepRefreshToken: true });
 
       // ล้างข้อมูลจาก IndexedDB
       await userService.logout();
-      
-      // รีเซ็ต user context
       setUser(null);
-
-      // แสดง toast
       toast({
         title: "ออกจากระบบสำเร็จ",
         description: "ขอบคุณที่ใช้งานระบบ",
       });
-
-      // redirect ไปที่หน้าแรก
       window.location.href = '/';
     } catch (error) {
       console.error('Error during logout:', error);

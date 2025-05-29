@@ -30,12 +30,11 @@ export const userService = {
     }
   },
 
-  async logout(): Promise<void> {
+  async logout(soft = true): Promise<void> {
     // ล้าง user จาก localStorage
     localStorage.removeItem('currentUser');
-    
     // ใช้ encrypted storage ล้างข้อมูล sensitive
-    encryptedStorage.clearUserData();
+    encryptedStorage.clearUserData(soft ? { keepRefreshToken: true } : undefined);
   },
 
   // Google Drive settings
@@ -58,4 +57,4 @@ export const userService = {
     // บันทึกการตั้งค่าลง encrypted storage
     encryptedStorage.setOAuthSettings(settings.clientId, settings.clientSecret, settings.driveUrl);
   },
-}; 
+};

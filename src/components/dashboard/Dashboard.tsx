@@ -230,25 +230,52 @@ export const Dashboard = () => {
           if (user && user.role !== determinedRole) {
             setUser({ ...user, role: determinedRole as UserRole });
           } else if (!user && email) {
-            // Only create a new user if no user exists - let CurriculumApp handle user creation with full name
-            const userData = encryptedStorage.getUserData();
-            const displayName = userData.name || 'Anirach Mingkhwan'; // Use stored name or fallback
-            
-            const newUser = {
-              id: 'oauth-user',
-              email: email,
-              name: displayName,
-              picture: (userData.picture && userData.picture !== 'null' && userData.picture !== 'undefined' && userData.picture !== '') ? userData.picture : undefined,
-              role: determinedRole as UserRole,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            };
-            setUser(newUser);
-            localStorage.setItem('currentUser', JSON.stringify(newUser));
+            // Check if user exists in localStorage from CurriculumApp
+            const storedUser = localStorage.getItem('currentUser');
+            if (storedUser) {
+              try {
+                const parsedUser = JSON.parse(storedUser);
+                setUser(parsedUser);
+              } catch (error) {
+                console.error('Error parsing stored user:', error);
+                // Fallback to creating minimal user object
+                const userData = encryptedStorage.getUserData();
+                const displayName = userData.name || 'User';
+                
+                const newUser = {
+                  id: 'oauth-user',
+                  email: email,
+                  name: displayName,
+                  picture: (userData.picture && userData.picture !== 'null' && userData.picture !== 'undefined' && userData.picture !== '') ? userData.picture : undefined,
+                  role: determinedRole as UserRole,
+                  createdAt: new Date(),
+                  updatedAt: new Date()
+                };
+                setUser(newUser);
+                localStorage.setItem('currentUser', JSON.stringify(newUser));
+              }
+            } else {
+              // Create minimal user object only if no stored user exists
+              const userData = encryptedStorage.getUserData();
+              const displayName = userData.name || 'User';
+              
+              const newUser = {
+                id: 'oauth-user',
+                email: email,
+                name: displayName,
+                picture: (userData.picture && userData.picture !== 'null' && userData.picture !== 'undefined' && userData.picture !== '') ? userData.picture : undefined,
+                role: determinedRole as UserRole,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              };
+              setUser(newUser);
+              localStorage.setItem('currentUser', JSON.stringify(newUser));
+            }
           }
         }
         
         // Setup automatic token refresh
+        setupTokenRefreshInterval();
         return true;
       } else if (refreshToken) {
         await refreshAccessToken(refreshToken);
@@ -273,7 +300,7 @@ export const Dashboard = () => {
         return false;
       }
     }
-  }, [refreshToken, refreshAccessToken, handleTokenExpired, setUser, user, setUserEmail, setUserRole]);
+  }, [refreshToken, refreshAccessToken, handleTokenExpired, setUser, user, setUserEmail, setUserRole, setupTokenRefreshInterval]);
 
   const handleGoogleLogin = useCallback(async () => {
     try {
@@ -313,141 +340,6 @@ export const Dashboard = () => {
       });
     }
   }, [user, toast]);
-
-  const handleAuthCode = useCallback(async (code: string) => {
-    try {
-      const settings = await userService.getGoogleDriveSettings();
-      if (!settings?.clientId || !settings?.clientSecret) {
-        throw new Error('Missing OAuth client credentials');
-      }
-
-      const response = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          code,
-          client_id: settings.clientId,
-          client_secret: settings.clientSecret,
-          redirect_uri: `${window.location.origin}/auth/callback`,
-          grant_type: 'authorization_code',
-        }),
-      });
-
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      setAccessToken(data.access_token);
-      encryptedStorage.setTokens(data.access_token, data.refresh_token);
-
-      if (data.refresh_token) {
-        setRefreshToken(data.refresh_token);
-      }
-
-      const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: `Bearer ${data.access_token}` }
-      });
-
-      if (!userResponse.ok) {
-        throw new Error('Failed to fetch user info');
-      }
-
-      const userData = await userResponse.json();
-      console.log('Google userinfo API response (Dashboard):', userData);
-      const email = userData.email;
-      setUserEmail(email);
-
-      const determinedRole = adminEmails.includes(email.toLowerCase()) ? 'Admin' : 'Viewer';
-      setUserRole(determinedRole as UserRole);
-
-      // Determine the display name - use actual name from Google API
-      const displayName = userData.name && userData.name.trim() ? userData.name.trim() : 'Anirach Mingkhwan';
-
-      const user = {
-        id: userData.id || 'oauth-user',
-        email: email,
-        name: displayName,
-        picture: userData.picture,
-        role: determinedRole as UserRole,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      setUser(user);
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      encryptedStorage.setUserData(email, displayName, userData.picture || '', determinedRole);
-
-      toast({
-        title: "เข้าสู่ระบบสำเร็จ",
-        description: `ยินดีต้อนรับ ${user.name} (${user.role})`,
-      });
-
-      if (settings?.driveUrl) {
-        const match = settings.driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
-        const folderId = match ? match[1] : null;
-        
-        if (folderId) {
-          setDriveUrl(settings.driveUrl);
-          setInputUrl(settings.driveUrl);
-          
-          try {
-            const driveResponse = await fetch(
-              `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)`,
-              { headers: { Authorization: `Bearer ${data.access_token}` } }
-            );
-
-            if (driveResponse.ok) {
-              const driveData = await driveResponse.json();
-              
-              if (driveData.files && driveData.files.length > 0) {
-                const items: FileItem[] = driveData.files.map((item: GoogleDriveFile) => ({
-                  id: item.id,
-                  name: item.name,
-                  type: item.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file',
-                  path: [],
-                  url: item.mimeType !== 'application/vnd.google-apps.folder' ? item.webViewLink : undefined,
-                  downloadUrl: item.webContentLink,
-                  size: item.size,
-                  lastModified: item.modifiedTime ? new Date(item.modifiedTime).toLocaleDateString() : undefined,
-                  parents: item.parents,
-                  mimeType: item.mimeType,
-                }));
-                
-                const sortedItems = sortFiles(items);
-                
-                setRootFolders(sortedItems);
-              } else {
-                setRootFolders([]);
-              }
-            } else {
-              console.error('❌ Immediate fetch failed:', driveResponse.status, await driveResponse.text());
-              setRootFolders([]);
-            }
-          } catch (fetchError) {
-            console.error('❌ Error in immediate file fetch:', fetchError);
-            setRootFolders([]);
-          }
-        } else {
-          console.warn('❌ Invalid drive URL format:', settings.driveUrl);
-          setRootFolders([]);
-        }
-      } else {
-        setRootFolders([]);
-      }
-
-    } catch (error) {
-      console.error('Error during OAuth flow:', error);
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง",
-        variant: "destructive",
-      });
-      handleTokenExpired();
-    }
-  }, [handleTokenExpired, setUser, toast, setUserEmail, setUserRole]);
 
   const handleSaveDriveUrl = async () => {
     if (!inputUrl) {
@@ -807,9 +699,9 @@ export const Dashboard = () => {
   }, [toast, fetchFiles, clientId, clientSecret]);
 
   useEffect(() => {
-    const loadUserSessionAndHandleOAuth = async () => {
+    const loadUserSessionFromStorage = async () => {
       try {
-        // Get data from encrypted storage
+        // Get data from encrypted storage - DO NOT handle OAuth here (CurriculumApp handles it)
         const { accessToken: storedAccessToken, refreshToken: storedRefreshToken } = encryptedStorage.getTokens();
         const { email: storedEmail } = encryptedStorage.getUserData();
         const { clientId: storedClientId, clientSecret: storedClientSecret, driveUrl: storedDriveUrl } = encryptedStorage.getOAuthSettings();
@@ -827,13 +719,14 @@ export const Dashboard = () => {
           setUserRole(adminEmails.includes(storedEmail.toLowerCase()) ? 'Admin' : 'Viewer');
         }
 
+        // Clean up URL params if they exist (but don't process them - CurriculumApp handles OAuth)
         const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-
-        if (code) {
-          await handleAuthCode(code);
+        if (urlParams.get('code')) {
           window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (storedAccessToken) {
+        }
+
+        // If we have stored tokens, validate them
+        if (storedAccessToken) {
           const storedRole = storedEmail ? (adminEmails.includes(storedEmail.toLowerCase()) ? 'Admin' : 'Viewer') : null;
           const params: ValidateAccessTokenParams = {
             token: storedAccessToken,
@@ -844,13 +737,13 @@ export const Dashboard = () => {
         }
 
       } catch (error) {
-        console.error('Error loading user session and handling OAuth:', error);
-        handleTokenExpired();
+        console.error('Error loading user session:', error);
+        // Don't call handleTokenExpired here - let CurriculumApp handle auth errors
       }
     };
 
-    loadUserSessionAndHandleOAuth();
-  }, [handleTokenExpired, handleAuthCode, validateAccessToken, setUser, toast, clientId, clientSecret, driveUrl, accessToken, refreshToken, userEmail, userRole, user]);
+    loadUserSessionFromStorage();
+  }, [validateAccessToken, setUser, toast, clientId, clientSecret, driveUrl]);
 
   useEffect(() => {
     const match = driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);

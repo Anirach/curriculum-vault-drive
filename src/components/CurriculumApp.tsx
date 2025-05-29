@@ -203,13 +203,19 @@ const AppContent = () => {
       const displayName = userData.name && userData.name.trim() ? userData.name.trim() : 'Anirach Mingkhwan';
 
       const userInfo = {
+        id: userData.id || 'oauth-user',
         email: userData.email,
         name: displayName,
         picture: userData.picture,
-        role
+        role: role as UserRole,
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
 
       setUser(userInfo);
+      
+      // Also store in localStorage for Dashboard component compatibility
+      localStorage.setItem('currentUser', JSON.stringify(userInfo));
 
       // เก็บข้อมูลการ login
       encryptedStorage.setUserData(userData.email, userInfo.name, userData.picture || '', role);
@@ -227,19 +233,35 @@ const AppContent = () => {
       try {
         setIsInitializing(true);
         console.log('Initializing app...');
-        
         // Migrate existing localStorage data to encrypted storage
         EncryptedStorage.migrateExistingData(SENSITIVE_KEYS);
-        
+
+        // Try to restore user from encrypted storage/localStorage first
+        let userData = encryptedStorage.getUserData();
+        if (!userData) {
+          // fallback to localStorage for backward compatibility
+          const localUser = localStorage.getItem('currentUser');
+          if (localUser) {
+            try {
+              userData = JSON.parse(localUser);
+            } catch (e) {
+              // Ignore JSON parse errors
+            }
+          }
+        }
+        // If we have user data and tokens, set user state immediately
+        const { refreshToken, accessToken } = encryptedStorage.getTokens();
+        if (userData && refreshToken) {
+          setUser({ ...userData, role: userData.role as UserRole });
+          setIsAuthenticated(true);
+        }
+
         // Clear old cached user data to ensure new name logic takes effect
-        const userData = encryptedStorage.getUserData();
-        
-        // Clear any old cached names that are not the full name
-        if (userData.name && (userData.name === 'Anirach.M' || userData.name === 'anirach.m' || userData.name.includes('A.M') || userData.name.includes('anirach.m'))) {
+        if (userData && userData.name && (userData.name === 'Anirach.M' || userData.name === 'anirach.m' || userData.name.includes('A.M') || userData.name.includes('anirach.m'))) {
           console.log('Clearing old cached user data');
           encryptedStorage.clearUserData();
         }
-        
+
         const code = location.state?.code;
         const authType = location.state?.type;
 
@@ -322,8 +344,9 @@ const AppContent = () => {
               navigate('/dashboard');
             }
           } else {
-            console.log('No valid tokens found, user needs to authenticate');
-            // Clear any refresh interval if tokens are invalid
+            // Only clear user if no valid tokens or refresh fails
+            setUser(null);
+            setIsAuthenticated(false);
             clearTokenRefreshInterval();
             // ถ้าอยู่ที่หน้า dashboard แต่ไม่มี token ให้กลับไปหน้า landing
             if (location.pathname === '/dashboard') {
@@ -333,7 +356,6 @@ const AppContent = () => {
         }
       } catch (error) {
         console.error('Error during initialization:', error);
-        // ลบข้อมูลการ login ที่ไม่ถูกต้อง
         encryptedStorage.clearUserData();
         clearTokenRefreshInterval();
         // ไปที่หน้า landing หากเกิดข้อผิดพลาด
@@ -368,15 +390,17 @@ const AppContent = () => {
   // Enhanced Google login with better token management
   const handleGoogleLogin = useCallback(async () => {
     try {
-      // ตรวจสอบ token ที่มีอยู่ก่อน
-      const isValid = await checkAndSetUserFromToken();
-      if (isValid) {
-        // ถ้า token ใช้งานได้ ให้ไปที่ Dashboard
-        navigate('/dashboard');
-        return;
+      // If we have a refresh token, try silent login first
+      const { refreshToken } = encryptedStorage.getTokens();
+      if (refreshToken) {
+        const isValid = await checkAndSetUserFromToken();
+        if (isValid) {
+          navigate('/dashboard');
+          return;
+        }
+        // If silent login fails, fall through to OAuth
       }
-
-      // ถ้า token ไม่สามารถใช้งานได้ ให้ทำ OAuth ตามปกติ
+      // Otherwise, do OAuth as before
       const settings = await userService.getGoogleDriveSettings();
       if (!settings || !settings.clientId || !settings.clientSecret) {
         toast({
@@ -386,12 +410,10 @@ const AppContent = () => {
         });
         return;
       }
-
       localStorage.setItem('returnPath', window.location.pathname);
       const redirectUri = `${window.location.origin}/auth/callback`;
       const scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify({ type: 'login' }))}`;
-
       window.location.href = authUrl;
     } catch (error) {
       console.error('Error during Google login:', error);
