@@ -137,6 +137,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
   const [folderNameCache, setFolderNameCache] = useState<Record<string, string>>({});
   const [loadingFolderNames, setLoadingFolderNames] = useState<Record<string, boolean>>({});
+  const [failedFolderNames, setFailedFolderNames] = useState<Record<string, boolean>>({}); // NEW: track failed fetches
 
   const [searchResults, setSearchResults] = useState<FileItem[] | null>(null);
   const [loadingSearch, setLoadingSearch] = useState(false);
@@ -347,9 +348,10 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       
       const newFolderNames: Record<string, string> = {};
       const newLoadingStates: Record<string, boolean> = {};
+      const newFailedStates: Record<string, boolean> = {}; // NEW
       
       for (const folderId of currentPath) {
-        if (!folderNameCache[folderId] && !loadingFolderNames[folderId]) {
+        if (!folderNameCache[folderId] && !loadingFolderNames[folderId] && !failedFolderNames[folderId]) {
           newLoadingStates[folderId] = true;
           try {
             const response = await fetch(
@@ -360,9 +362,12 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
             if (response.ok) {
               const data = await response.json();
               newFolderNames[folderId] = data.name;
+            } else {
+              newFailedStates[folderId] = true; // Mark as failed if not ok
             }
           } catch (error) {
             console.error(`Error fetching name for folder ${folderId}:`, error);
+            newFailedStates[folderId] = true; // Mark as failed on error
           } finally {
             newLoadingStates[folderId] = false;
           }
@@ -375,10 +380,13 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       if (Object.keys(newLoadingStates).length > 0) {
         setLoadingFolderNames(prev => ({ ...prev, ...newLoadingStates }));
       }
+      if (Object.keys(newFailedStates).length > 0) {
+        setFailedFolderNames(prev => ({ ...prev, ...newFailedStates }));
+      }
     };
 
     fetchFolderNames();
-  }, [currentPath, accessToken, folderNameCache, loadingFolderNames]);
+  }, [currentPath, accessToken, folderNameCache, loadingFolderNames, failedFolderNames]);
 
   const handleRefresh = async () => {
     // Provide visual feedback by showing a toast
@@ -596,7 +604,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         description: error instanceof Error ? error.message : "ไม่สามารถเปลี่ยนชื่อไฟล์ได้",
         variant: "destructive",
       });
-      throw error; // Rethrow to propagate error
+      throw error;
     }
   };
 
@@ -1208,7 +1216,14 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
                 className="cursor-pointer hover:text-blue-600"
                 onClick={() => onPathChange(currentPath.slice(0, index + 1))}
               >
-                {getFolderName(folderId)}
+                {/* Show folder name if available, otherwise show loading or fallback */}
+                {folderNameCache[folderId]
+                  ? folderNameCache[folderId]
+                  : loadingFolderNames[folderId]
+                    ? 'Loading...'
+                    : failedFolderNames[folderId]
+                      ? 'Unknown Folder'
+                      : 'Loading...'}
               </span>
             </div>
           ))}
