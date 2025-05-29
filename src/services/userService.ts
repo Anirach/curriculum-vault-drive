@@ -39,14 +39,31 @@ export const userService = {
 
   // Google Drive settings
   async getGoogleDriveSettings() {
-    // ดึงการตั้งค่าจาก encrypted storage หรือใช้ค่าเริ่มต้น
-    const { clientId, clientSecret, driveUrl } = encryptedStorage.getOAuthSettings();
-    
-    return {
-      clientId: clientId || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientId,
-      clientSecret: clientSecret || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientSecret,
-      driveUrl: driveUrl || DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl
+    console.log('🔍 Debug: Getting Google Drive settings from encrypted storage...');
+    const storedSettings = encryptedStorage.getOAuthSettings();
+    console.log('🔍 Debug: Stored OAuth settings:', {
+      hasStoredSettings: !!storedSettings,
+      hasClientId: !!storedSettings?.clientId,
+      hasClientSecret: !!storedSettings?.clientSecret,
+      hasDriveUrl: !!storedSettings?.driveUrl
+    });
+
+    const settings = {
+      clientId: storedSettings.clientId || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientId,
+      clientSecret: storedSettings.clientSecret || DEFAULT_GOOGLE_OAUTH_SETTINGS.clientSecret,
+      driveUrl: storedSettings.driveUrl || DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl
     };
+
+    console.log('🔍 Debug: Final OAuth settings:', {
+      hasSettings: !!settings,
+      hasClientId: !!settings.clientId,
+      hasClientSecret: !!settings.clientSecret,
+      hasDriveUrl: !!settings.driveUrl,
+      clientIdLength: settings.clientId?.length,
+      clientSecretLength: settings.clientSecret?.length
+    });
+
+    return settings;
   },
 
   async setGoogleDriveSettings(settings: {

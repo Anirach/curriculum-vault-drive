@@ -121,11 +121,26 @@ export const encryptedStorage = {
     EncryptedStorage.setItem('driveUrl', driveUrl);
   },
 
-  getOAuthSettings: () => ({
-    clientId: EncryptedStorage.getItem('clientId'),
-    clientSecret: EncryptedStorage.getItem('clientSecret'),
-    driveUrl: EncryptedStorage.getItem('driveUrl')
-  }),
+  getOAuthSettings: () => {
+    console.log('🔍 Debug: Getting OAuth settings from encrypted storage...');
+    const clientId = EncryptedStorage.getItem('clientId');
+    const clientSecret = EncryptedStorage.getItem('clientSecret');
+    const driveUrl = EncryptedStorage.getItem('driveUrl');
+
+    console.log('🔍 Debug: Retrieved OAuth settings:', {
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      hasDriveUrl: !!driveUrl,
+      clientIdLength: clientId?.length,
+      clientSecretLength: clientSecret?.length
+    });
+
+    return {
+      clientId,
+      clientSecret,
+      driveUrl
+    };
+  },
 
   // Clear all sensitive data, with option to keep refresh token for soft logout
   clearUserData: (options?: { keepRefreshToken?: boolean }) => {
