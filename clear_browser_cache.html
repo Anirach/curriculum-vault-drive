@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Browser Cache</title>
+</head>
+<body>
+    <h1>Clear Browser Cache</h1>
+    <button onclick="clearCache()">Clear All Cache</button>
+    <div id="status"></div>
+    
+    <script>
+        function clearCache() {
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            // Try to clear indexedDB
+            if ('indexedDB' in window) {
+                indexedDB.deleteDatabase('userDataDB');
+            }
+            
+            document.getElementById('status').innerHTML = 'Cache cleared! Please refresh the main application.';
+            console.log('All cache cleared');
+        }
+        
+        // Auto-clear on load
+        clearCache();
+    </script>
+</body>
+</html>

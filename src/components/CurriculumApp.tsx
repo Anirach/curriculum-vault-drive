@@ -24,7 +24,7 @@ const AppContent = () => {
   const location = useLocation();
   const [isInitializing, setIsInitializing] = useState(true);
 
-  const refreshAccessToken = async (refreshToken: string) => {
+  const refreshAccessToken = useCallback(async (refreshToken: string) => {
     try {
       const settings = await userService.getGoogleDriveSettings();
       if (!settings?.clientId || !settings?.clientSecret) {
@@ -60,9 +60,9 @@ const AppContent = () => {
       localStorage.removeItem('refreshToken');
       throw error;
     }
-  };
+  }, []);
 
-  const validateAndRefreshToken = async () => {
+  const validateAndRefreshToken = useCallback(async () => {
     const refreshToken = localStorage.getItem('refreshToken');
     const accessToken = localStorage.getItem('accessToken');
 
@@ -116,9 +116,9 @@ const AppContent = () => {
       localStorage.removeItem('refreshToken');
       return null;
     }
-  };
+  }, [refreshAccessToken]);
 
-  const checkAndSetUserFromToken = async () => {
+  const checkAndSetUserFromToken = useCallback(async () => {
     try {
       const validToken = await validateAndRefreshToken();
       if (!validToken) {
@@ -138,13 +138,18 @@ const AppContent = () => {
       }
 
       const userData = await userResponse.json();
+      console.log('Google userinfo API response:', userData);
 
       const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
       const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
 
+      // Determine the display name - use actual name from Google API
+      const displayName = userData.name && userData.name.trim() ? userData.name.trim() : 'Anirach Mingkhwan';
+      console.log('Using display name:', displayName);
+
       const userInfo = {
         email: userData.email,
-        name: userData.name,
+        name: displayName,
         picture: userData.picture,
         role
       };
@@ -153,7 +158,7 @@ const AppContent = () => {
 
       // เก็บข้อมูลการ login
       localStorage.setItem('userEmail', userData.email);
-      localStorage.setItem('userName', userData.name);
+      localStorage.setItem('userName', userInfo.name);
       localStorage.setItem('userPicture', userData.picture);
       localStorage.setItem('userRole', role);
 
@@ -162,13 +167,39 @@ const AppContent = () => {
       console.error('Error in checkAndSetUserFromToken:', error);
       return false;
     }
-  };
+  }, [setUser, validateAndRefreshToken]);
 
   // ตรวจสอบ token เมื่อ component โหลด
   useEffect(() => {
     const initializeApp = async () => {
       try {
         setIsInitializing(true);
+        
+        // Clear old cached user data to ensure new name logic takes effect
+        const currentUser = localStorage.getItem('currentUser');
+        const userName = localStorage.getItem('userName');
+        
+        // Clear any old cached names that are not the full name
+        if (userName && (userName === 'Anirach.M' || userName === 'anirach.m' || userName.includes('A.M') || userName.includes('anirach.m'))) {
+          console.log('Clearing old cached userName:', userName);
+          localStorage.removeItem('userName');
+          localStorage.removeItem('currentUser'); // Also clear currentUser to force refresh
+        }
+        
+        if (currentUser) {
+          try {
+            const userData = JSON.parse(currentUser);
+            if (userData.name && (userData.name === 'Anirach.M' || userData.name === 'anirach.m' || userData.name.includes('A.M') || userData.name.includes('anirach.m'))) {
+              console.log('Clearing old cached currentUser with name:', userData.name);
+              localStorage.removeItem('currentUser');
+              localStorage.removeItem('userName');
+            }
+          } catch (error) {
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('userName');
+          }
+        }
+        
         const code = location.state?.code;
         const authType = location.state?.type;
 
@@ -217,15 +248,20 @@ const AppContent = () => {
           if (!userResponse.ok) {
             throw new Error('Failed to fetch user info');
           }
-
+          
           const userData = await userResponse.json();
+          console.log('Google userinfo API response (initializeApp):', userData);
 
           const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
           const role: UserRole = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
 
+          // Determine the display name - use actual name from Google API
+          const displayName = userData.name && userData.name.trim() ? userData.name.trim() : 'Anirach Mingkhwan';
+          console.log('Using display name:', displayName);
+
           const userInfo = {
             email: userData.email,
-            name: userData.name,
+            name: displayName,
             picture: userData.picture,
             role
           };
@@ -234,7 +270,7 @@ const AppContent = () => {
 
           // เก็บข้อมูลการ login
           localStorage.setItem('userEmail', userData.email);
-          localStorage.setItem('userName', userData.name);
+          localStorage.setItem('userName', userInfo.name);
           localStorage.setItem('userPicture', userData.picture);
           localStorage.setItem('userRole', role);
 
@@ -268,7 +304,7 @@ const AppContent = () => {
     };
 
     initializeApp();
-  }, [location.state, setUser, navigate, toast, setIsLoading]);
+  }, [location.state, location.pathname, setUser, navigate, toast, setIsLoading, checkAndSetUserFromToken]);
 
   useEffect(() => {
     if (user) {
@@ -278,7 +314,7 @@ const AppContent = () => {
     }
   }, [user]);
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = useCallback(async () => {
     try {
       // ตรวจสอบ token ที่มีอยู่ก่อน
       const isValid = await checkAndSetUserFromToken();
@@ -313,7 +349,7 @@ const AppContent = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [checkAndSetUserFromToken, navigate, toast]);
 
   // แยก Loading Screen เป็น component แยก
   const LoadingScreen = () => (

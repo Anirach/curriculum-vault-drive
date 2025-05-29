@@ -58,7 +58,7 @@ export const Header = ({
   return (
     <>
       <header className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="mx-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <GraduationCap className="w-6 h-6 text-blue-600" />
@@ -67,13 +67,18 @@ export const Header = ({
           </div>
           {user && (
             <>
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4 mr-2">
                 {!accessToken && onConnectDrive && (
                   <Button variant="outline" size="sm" onClick={onConnectDrive}>
                     เชื่อมต่อ Google Drive
                   </Button>
                 )}
                 <div className="flex items-center space-x-2">
+                  {user.role === 'Admin' && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      Admin
+                    </span>
+                  )}
                   <Avatar>
                     {user.picture ? (
                       <AvatarImage src={user.picture} alt={user.name} />
@@ -86,11 +91,6 @@ export const Header = ({
                   <div className="hidden md:block">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                      {user.role === 'Admin' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Admin
-                        </span>
-                      )}
                     </div>
                     <p className="text-xs text-gray-500">{user.email}</p>
                   </div>

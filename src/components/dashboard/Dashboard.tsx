@@ -186,10 +186,14 @@ export const Dashboard = () => {
           if (user && user.role !== determinedRole) {
             setUser({ ...user, role: determinedRole as UserRole });
           } else if (!user && email) {
+            // Only create a new user if no user exists - let CurriculumApp handle user creation with full name
+            const storedUserName = localStorage.getItem('userName');
+            const displayName = storedUserName || 'Anirach Mingkhwan'; // Use stored name or fallback
+            
             const newUser = {
               id: 'oauth-user',
               email: email,
-              name: email.split('@')[0],
+              name: displayName,
               role: determinedRole as UserRole,
               createdAt: new Date(),
               updatedAt: new Date()
@@ -306,6 +310,7 @@ export const Dashboard = () => {
       }
 
       const userData = await userResponse.json();
+      console.log('Google userinfo API response (Dashboard):', userData);
       const email = userData.email;
       setUserEmail(email);
       localStorage.setItem('userEmail', email);
@@ -313,10 +318,14 @@ export const Dashboard = () => {
       const determinedRole = adminEmails.includes(email.toLowerCase()) ? 'Admin' : 'Viewer';
       setUserRole(determinedRole as UserRole);
 
+      // Determine the display name - use actual name from Google API
+      const displayName = userData.name && userData.name.trim() ? userData.name.trim() : 'Anirach Mingkhwan';
+      console.log('Dashboard using display name:', displayName);
+
       const user = {
         id: userData.id || 'oauth-user',
         email: email,
-        name: userData.name || email.split('@')[0],
+        name: displayName,
         picture: userData.picture,
         role: determinedRole as UserRole,
         createdAt: new Date(),
@@ -325,6 +334,7 @@ export const Dashboard = () => {
 
       setUser(user);
       localStorage.setItem('currentUser', JSON.stringify(user));
+      localStorage.setItem('userName', displayName); // Store the correct name
       localStorage.setItem('userRole', determinedRole);
 
       toast({
