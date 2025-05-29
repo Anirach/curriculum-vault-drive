@@ -37,7 +37,7 @@ RUN mkdir -p /var/cache/nginx /var/run && \
 USER nginx
 
 # Expose port 80
-EXPOSE 80
+EXPOSE 8000
 
 # Start nginx with custom command to run as root
 CMD ["nginx", "-g", "daemon off;"]
