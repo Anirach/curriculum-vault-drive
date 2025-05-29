@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './Header';
 import { FileBrowser } from './FileBrowser';
 import { PDFViewer } from './PDFViewer';
@@ -42,7 +42,7 @@ export interface GoogleDriveResponse {
 }
 
 // List of admin email addresses - users not in this list will be assigned 'Viewer' role
-const adminEmails = ['anirach.m@fitm.kmutnb.ac.th'];
+const adminEmails = ['anirach.m@fitm.kmutnb.ac.th', 'chutharat.m@op.kmutnb.ac.th'];
 
 // Helper function to sort files: folders first, then files, both in ascending alphabetical order
 const sortFiles = (files: FileItem[]): FileItem[] => {
@@ -84,12 +84,28 @@ export const Dashboard = () => {
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
+  // Refs for token refresh management
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isRefreshingRef = useRef(false);
+
   // Debug useEffect to monitor rootFolders state
   useEffect(() => {
   }, [rootFolders, currentPath, accessToken, user]);
 
+  // Clear token refresh interval
+  const clearTokenRefreshInterval = useCallback(() => {
+    if (intervalRef.current) {
+      console.log('Clearing token refresh interval');
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
   const handleTokenExpired = useCallback(() => {
     setIsLoggingOut(true);
+    
+    // Clear token refresh interval
+    clearTokenRefreshInterval();
     
     // ล้างข้อมูลทั้งหมดใน encrypted storage และ localStorage
     encryptedStorage.clearUserData();
@@ -113,17 +129,27 @@ export const Dashboard = () => {
       setIsLoggingOut(false);
       window.location.href = '/';
     }, 300);
-  }, [setUser]);
+  }, [setUser, clearTokenRefreshInterval]);
 
   const refreshAccessToken = useCallback(async (token: string) => {
+    // Prevent multiple simultaneous refresh attempts
+    if (isRefreshingRef.current) {
+      console.log('Token refresh already in progress, skipping...');
+      return;
+    }
+
+    isRefreshingRef.current = true;
+    
     const settings = await userService.getGoogleDriveSettings();
     if (!settings.clientId || !settings.clientSecret) {
       console.error('Cannot refresh token: Missing client settings');
+      isRefreshingRef.current = false;
       handleTokenExpired();
       throw new Error('Missing client settings for token refresh');
     }
 
     try {
+      console.log('Refreshing access token...');
       const response = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
@@ -143,19 +169,44 @@ export const Dashboard = () => {
         throw new Error(data.error);
       }
 
+      console.log('Token refreshed successfully');
       setAccessToken(data.access_token);
       encryptedStorage.setTokens(data.access_token, data.refresh_token);
       if (data.refresh_token) {
          setRefreshToken(data.refresh_token);
       }
+      
       return data.access_token;
 
     } catch (error) {
       console.error('Error refreshing token:', error);
       handleTokenExpired();
       throw error;
+    } finally {
+      isRefreshingRef.current = false;
     }
   }, [handleTokenExpired]);
+
+  // Setup automatic token refresh every 50 minutes (before 1-hour expiry)
+  const setupTokenRefreshInterval = useCallback(() => {
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    // Only setup if we have a refresh token
+    if (refreshToken) {
+      console.log('Setting up token refresh interval (50 minutes)');
+      intervalRef.current = setInterval(async () => {
+        try {
+          console.log('Automatic token refresh triggered');
+          await refreshAccessToken(refreshToken);
+        } catch (error) {
+          console.error('Automatic token refresh failed:', error);
+        }
+      }, 50 * 60 * 1000); // 50 minutes in milliseconds
+    }
+  }, [refreshToken, refreshAccessToken]);
 
   const validateAccessToken = useCallback<ValidateAccessTokenFunction>(async ({ token, email, role }) => {
     try {
@@ -196,6 +247,8 @@ export const Dashboard = () => {
             localStorage.setItem('currentUser', JSON.stringify(newUser));
           }
         }
+        
+        // Setup automatic token refresh
         return true;
       } else if (refreshToken) {
         await refreshAccessToken(refreshToken);
@@ -853,6 +906,19 @@ export const Dashboard = () => {
 
     autoLoadDriveUrlFromEnv();
   }, [accessToken, driveUrl, fetchFiles, clientId, clientSecret]);
+
+  // Token refresh interval management
+  useEffect(() => {
+    // Setup token refresh interval when we have both access and refresh tokens
+    if (accessToken && refreshToken) {
+      setupTokenRefreshInterval();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      clearTokenRefreshInterval();
+    };
+  }, [accessToken, refreshToken, setupTokenRefreshInterval, clearTokenRefreshInterval]);
 
   const handlePathChange = useCallback((path: string[]) => {
     setCurrentPath(path);
