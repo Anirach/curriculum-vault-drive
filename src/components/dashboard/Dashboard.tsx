@@ -578,7 +578,7 @@ export const Dashboard = () => {
     }
   }, [user, toast, setAccessToken, setRefreshToken]);
 
-  const fetchFiles = useCallback(async (targetFolderId: string) => {
+  const fetchFiles = useCallback(async (targetFolderId: string, forceRefresh = false) => {
     if (!targetFolderId) {
       setRootFolders([]);
       return;
@@ -590,9 +590,17 @@ export const Dashboard = () => {
     }
 
     try {
+      // Add cache-busting parameter when refreshing
+      const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
       const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q='${targetFolderId}' in parents and trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        `https://www.googleapis.com/drive/v3/files?q='${targetFolderId}' in parents and trashed=false&fields=files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)${cacheBuster}`,
+        { 
+          headers: { 
+            Authorization: `Bearer ${accessToken}`,
+            // Force no-cache when refreshing
+            ...(forceRefresh && { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' })
+          } 
+        }
       );
 
       if (response.status === 401) {
@@ -870,6 +878,16 @@ export const Dashboard = () => {
     setSelectedFile(null);
   }, []);
 
+  const handleRefreshRootFolders = useCallback(async () => {
+    const match = driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
+    const rootFolderId = match ? match[1] : null;
+    
+    if (rootFolderId && currentPath.length === 0) {
+      // Only refresh root folders if we're at the root level
+      await fetchFiles(rootFolderId, true); // Force refresh
+    }
+  }, [driveUrl, currentPath, fetchFiles]);
+
   const LoadingScreen = () => (
     <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 transition-opacity duration-300">
       <div className="text-center">
@@ -970,6 +988,7 @@ export const Dashboard = () => {
               userRole={user.role}
               accessToken={accessToken}
               onInsufficientScopeError={handleInsufficientScopeError}
+              onRefreshRootFolders={handleRefreshRootFolders}
             />
             {selectedFile && selectedFile.type === 'file' && (
               <PDFViewer file={selectedFile} onClose={() => setSelectedFile(null)} />

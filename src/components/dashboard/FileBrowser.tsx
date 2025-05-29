@@ -33,6 +33,7 @@ interface FileBrowserProps {
   userRole?: UserRole;
   accessToken?: string;
   onInsufficientScopeError?: () => Promise<void>;
+  onRefreshRootFolders?: () => Promise<void>;
 }
 
 interface ShareDialogProps {
@@ -125,7 +126,7 @@ const ShareDialog: React.FC<ShareDialogProps> = ({ isOpen, onClose, onShare, fol
   );
 };
 
-export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolders, userRole, accessToken, onInsufficientScopeError }: FileBrowserProps) => {
+export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolders, userRole, accessToken, onInsufficientScopeError, onRefreshRootFolders }: FileBrowserProps) => {
   const { hasPermission } = useUser();
   const [searchQuery, setSearchQuery] = useState('');
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -210,15 +211,23 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
   }, [onInsufficientScopeError]);
 
   // ฟังก์ชันใหม่สำหรับดึง Direct Children เท่านั้น
-  const fetchDirectChildren = useCallback(async (folderId: string, token: string): Promise<FileItem[]> => {
+  const fetchDirectChildren = useCallback(async (folderId: string, token: string, forceRefresh = false): Promise<FileItem[]> => {
     let allFiles: FileItem[] = [];
     let pageToken: string | null = null;
 
     try {
       do {
+        // Add cache-busting parameter when refreshing
+        const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
         const response = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken, files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)&access_token=${token}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? '&pageToken=' + pageToken : ''}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=nextPageToken, files(id,name,mimeType,size,modifiedTime,parents,webViewLink,webContentLink)&access_token=${token}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? '&pageToken=' + pageToken : ''}${cacheBuster}`,
+          { 
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              // Force no-cache when refreshing
+              ...(forceRefresh && { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' })
+            } 
+          }
         );
 
         if (!response.ok) {
@@ -286,11 +295,14 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
       }
 
       try {
+        // Check if this is a refresh trigger (refreshTrigger > 0)
+        const isRefresh = refreshTrigger > 0;
+        
         if (currentPath.length === 0 && targetFolderId) {
-          const directChildren = await fetchDirectChildren(targetFolderId, accessToken);
+          const directChildren = await fetchDirectChildren(targetFolderId, accessToken, isRefresh);
           setFiles(directChildren);
         } else if (currentPath.length > 0 && targetFolderId) {
-          const directChildren = await fetchDirectChildren(targetFolderId, accessToken);
+          const directChildren = await fetchDirectChildren(targetFolderId, accessToken, isRefresh);
           setFiles(directChildren);
         }
       } catch (error) {
@@ -367,10 +379,24 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     fetchFolderNames();
   }, [currentPath, accessToken, folderNameCache, loadingFolderNames]);
 
-  const handleRefresh = () => {
-    setRefreshTrigger(prev => {
-      return prev + 1;
+  const handleRefresh = async () => {
+    // Provide visual feedback by showing a toast
+    toast({
+      title: "รีเฟรชไฟล์",
+      description: "กำลังโหลดข้อมูลล่าสุดจาก Google Drive...",
     });
+    
+    // If we're at root level and have a root folder refresh handler, use it
+    if (currentPath.length === 0 && rootFolders && rootFolders.length > 0 && onRefreshRootFolders) {
+      try {
+        await onRefreshRootFolders();
+      } catch (error) {
+        console.error('Error refreshing root folders:', error);
+      }
+    } else {
+      // Otherwise use the local refresh trigger
+      setRefreshTrigger(prev => prev + 1);
+    }
   };
 
   const getParentIdForNewFolder = (): string | undefined => {
