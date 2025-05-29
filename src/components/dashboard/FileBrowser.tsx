@@ -267,7 +267,8 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         }
       } while (pageToken);
 
-      return allFiles;
+      // เรียงลำดับไฟล์ทันทีที่ได้รับข้อมูลทั้งหมด
+      return sortFiles(allFiles);
     } catch (error) {
       console.error('Error fetching direct children for folder:', error);
       throw error;
@@ -283,7 +284,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
 
       // If we're at the root level and have rootFolders from Dashboard, use them
       if (currentPath.length === 0 && rootFolders && rootFolders.length > 0) {
-        setFiles(sortFiles(rootFolders));
+        setFiles(rootFolders); // ไม่ต้องเรียงลำดับอีกเพราะ rootFolders ถูกเรียงลำดับแล้วจาก Dashboard
         return;
       }
 
@@ -302,10 +303,10 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
         
         if (currentPath.length === 0 && targetFolderId) {
           const directChildren = await fetchDirectChildren(targetFolderId, accessToken, isRefresh);
-          setFiles(directChildren);
+          setFiles(directChildren); // ไม่ต้องเรียงลำดับอีกเพราะ directChildren ถูกเรียงลำดับแล้วจาก fetchDirectChildren
         } else if (currentPath.length > 0 && targetFolderId) {
           const directChildren = await fetchDirectChildren(targetFolderId, accessToken, isRefresh);
-          setFiles(directChildren);
+          setFiles(directChildren); // ไม่ต้องเรียงลำดับอีกเพราะ directChildren ถูกเรียงลำดับแล้วจาก fetchDirectChildren
         }
       } catch (error) {
         console.error('Failed to load files:', error);
@@ -314,7 +315,7 @@ export const FileBrowser = ({ currentPath, onPathChange, onFileSelect, rootFolde
     };
 
     loadFiles();
-  }, [currentPath, accessToken, driveUrl, searchQuery, fetchDirectChildren, rootFolders, refreshTrigger]); // Add refreshTrigger to dependencies
+  }, [currentPath, accessToken, driveUrl, searchQuery, fetchDirectChildren, rootFolders, refreshTrigger]);
 
   // แยก useEffect สำหรับการค้นหา
   useEffect(() => {
