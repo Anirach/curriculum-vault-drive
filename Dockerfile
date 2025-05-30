@@ -1,43 +1,37 @@
-# Build stage
-FROM node:20-alpine as build
+FROM node:18-alpine AS build
 
 WORKDIR /app
-
-# Copy package files
 COPY package*.json ./
+RUN npm ci --only=production
 
-# Install dependencies
-RUN npm install
-
-# Copy source code
 COPY . .
+RUN npm run build
 
-# Build the application
-RUN npm run build || exit 1
-
-# Production stage
 FROM nginx:alpine
 
-# Copy built assets from build stage
-COPY --from=build /app/dist /usr/share/nginx/html
+# Create nginx user and directories with proper permissions
+RUN addgroup -g 101 -S nginx && \
+    adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx && \
+    mkdir -p /var/cache/nginx /var/log/nginx /tmp && \
+    chown -R nginx:nginx /var/cache/nginx /var/log/nginx /tmp && \
+    chmod -R 755 /var/cache/nginx /var/log/nginx /tmp
 
 # Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/nginx.conf
 
-# Set permissions and create necessary directories
-RUN mkdir -p /var/cache/nginx /var/run && \
+# Copy built application
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Create and set permissions for required directories
+RUN mkdir -p /usr/share/nginx/html && \
     chown -R nginx:nginx /usr/share/nginx/html && \
-    chmod -R 755 /usr/share/nginx/html && \
-    chown -R nginx:nginx /var/cache/nginx && \
-    chown -R nginx:nginx /var/log/nginx && \
-    chown -R nginx:nginx /etc/nginx/conf.d && \
-    chown -R nginx:nginx /var/run
+    chmod -R 755 /usr/share/nginx/html
 
-# Use non-root user for worker processes
+# Switch to nginx user
 USER nginx
 
-# Expose port 80
-EXPOSE 8000
+# Expose port 8080 (non-privileged port)
+EXPOSE 8080
 
-# Start nginx with custom command to run as root
+# Start nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]
