@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Auth Debug Helper</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .error { background-color: #ffebee; border-color: #f44336; }
+        .success { background-color: #e8f5e8; border-color: #4caf50; }
+        .warning { background-color: #fff3e0; border-color: #ff9800; }
+        .info { background-color: #e3f2fd; border-color: #2196f3; }
+        code { background-color: #f5f5f5; padding: 2px 4px; border-radius: 3px; }
+        pre { background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        .checklist { list-style-type: none; padding: 0; }
+        .checklist li { margin: 5px 0; padding: 5px; }
+        .checklist li::before { content: "☐ "; margin-right: 5px; }
+        .checklist li.done::before { content: "✅ "; }
+        .checklist li.error::before { content: "❌ "; }
+    </style>
+</head>
+<body>
+    <h1>🔐 Google Authentication Debug Helper</h1>
+    
+    <div class="section info">
+        <h2>📋 Pre-Setup Checklist</h2>
+        <p>Follow these steps to set up Google OAuth for your Curriculum Vault Drive app:</p>
+        <ul class="checklist">
+            <li>Create a Google Cloud Project at <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+            <li>Enable the Google Drive API and Google+ API</li>
+            <li>Create OAuth 2.0 credentials (Web application type)</li>
+            <li>Configure authorized redirect URIs</li>
+            <li>Create a .env file with your credentials</li>
+            <li>Set up a Google Drive folder and get its ID</li>
+        </ul>
+    </div>
+
+    <div class="section warning">
+        <h2>🔗 Required Redirect URIs</h2>
+        <p>Add these URIs to your Google OAuth client configuration:</p>
+        <pre id="redirectUris">
+Development: http://localhost:5173/auth/callback
+Production: https://your-domain.com/auth/callback
+        </pre>
+        <p><strong>Current Origin:</strong> <span id="currentOrigin"></span></p>
+        <p><strong>Required Callback URL:</strong> <span id="callbackUrl"></span></p>
+    </div>
+
+    <div class="section info">
+        <h2>📁 .env File Template</h2>
+        <p>Create a <code>.env</code> file in your project root with these variables:</p>
+        <pre>
+# Google OAuth Settings
+VITE_GOOGLE_CLIENT_ID=your_client_id_here.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_SECRET=your_client_secret_here
+
+# Google Drive Settings  
+VITE_GOOGLE_DRIVE_URL=https://drive.google.com/drive/folders/your_folder_id_here
+        </pre>
+    </div>
+
+    <div class="section">
+        <h2>🔍 Environment Variables Check</h2>
+        <div id="envCheck">
+            <p>⏳ Checking environment variables...</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🌐 Test OAuth Flow</h2>
+        <p>Use this button to test if your OAuth configuration works:</p>
+        <button id="testOAuth" onclick="testOAuthFlow()">🧪 Test Google OAuth</button>
+        <div id="oauthResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>📖 Common Issues & Solutions</h2>
+        <details>
+            <summary><strong>Error: "Missing OAuth configuration"</strong></summary>
+            <ul>
+                <li>Check if your .env file exists in the project root</li>
+                <li>Verify environment variable names start with VITE_</li>
+                <li>Restart your development server after creating/modifying .env</li>
+                <li>Ensure no spaces around the = sign in .env file</li>
+            </ul>
+        </details>
+        
+        <details>
+            <summary><strong>Error: "redirect_uri_mismatch"</strong></summary>
+            <ul>
+                <li>Check that your redirect URI exactly matches what's configured in Google Cloud Console</li>
+                <li>Ensure you're using the correct port (5173 for Vite dev server)</li>
+                <li>Add both HTTP and HTTPS versions if needed</li>
+            </ul>
+        </details>
+        
+        <details>
+            <summary><strong>Error: "invalid_client"</strong></summary>
+            <ul>
+                <li>Verify your Client ID and Client Secret are correct</li>
+                <li>Check that the OAuth client is enabled in Google Cloud Console</li>
+                <li>Ensure you're using the correct project in Google Cloud Console</li>
+            </ul>
+        </details>
+    </div>
+
+    <script>
+        // Update current origin and callback URL
+        document.getElementById('currentOrigin').textContent = window.location.origin;
+        document.getElementById('callbackUrl').textContent = window.location.origin + '/auth/callback';
+
+        // Check if we're in a Vite environment (this won't work in production build)
+        function checkEnvironment() {
+            const envCheck = document.getElementById('envCheck');
+            
+            try {
+                // This will only work if we're in the actual React app context
+                // For this standalone HTML, we'll provide general guidance
+                envCheck.innerHTML = `
+                    <div class="warning">
+                        <p><strong>⚠️ Environment Check Instructions:</strong></p>
+                        <ol>
+                            <li>Open your browser's developer console (F12)</li>
+                            <li>Look for debug messages starting with "🔧 DEBUG: Environment check"</li>
+                            <li>Check if environment variables are loaded correctly</li>
+                            <li>Verify that hasViteGoogleClientId and hasViteGoogleClientSecret are true</li>
+                        </ol>
+                        <p>If environment variables are missing:</p>
+                        <ul>
+                            <li>Create a <code>.env</code> file in your project root</li>
+                            <li>Add your Google OAuth credentials</li>
+                            <li>Restart your development server</li>
+                        </ul>
+                    </div>
+                `;
+            } catch (error) {
+                envCheck.innerHTML = `
+                    <div class="error">
+                        <p>❌ Cannot check environment variables from this context.</p>
+                        <p>Please check the browser console in your main application for environment debug messages.</p>
+                    </div>
+                `;
+            }
+        }
+
+        function testOAuthFlow() {
+            const resultDiv = document.getElementById('oauthResult');
+            resultDiv.innerHTML = `
+                <div class="info" style="margin-top: 10px;">
+                    <p><strong>🔍 OAuth Test Instructions:</strong></p>
+                    <ol>
+                        <li>Open your main application</li>
+                        <li>Click the login/sign-in button</li>
+                        <li>Check the browser console for debug messages</li>
+                        <li>Look for messages starting with 🚀, 🔍, 🔐, ✅, or ❌</li>
+                    </ol>
+                    <p><strong>What to look for:</strong></p>
+                    <ul>
+                        <li>✅ "OAuth settings received" - Configuration is working</li>
+                        <li>❌ "Missing OAuth settings" - Check your .env file</li>
+                        <li>🔐 "Token exchange response" - OAuth flow is working</li>
+                        <li>❌ "OAuth token exchange error" - Check Google Cloud Console setup</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Initialize checks
+        checkEnvironment();
+    </script>
+</body>
+</html>

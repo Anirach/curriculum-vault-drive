@@ -39,9 +39,21 @@ export const userService = {
 
   // Google Drive settings
   async getGoogleDriveSettings() {
-    console.log('🔍 Debug: Getting Google Drive settings from encrypted storage...');
+    console.log('🔍 DEBUG: Getting Google Drive settings...');
+    
+    // Check environment variables first
+    console.log('🌍 DEBUG: Environment variables:', {
+      hasViteGoogleClientId: !!import.meta.env.VITE_GOOGLE_CLIENT_ID,
+      hasViteGoogleClientSecret: !!import.meta.env.VITE_GOOGLE_CLIENT_SECRET,
+      hasViteGoogleDriveUrl: !!import.meta.env.VITE_GOOGLE_DRIVE_URL,
+      hasViteGoogleApiKey: !!import.meta.env.VITE_GOOGLE_API_KEY,
+      viteClientIdLength: import.meta.env.VITE_GOOGLE_CLIENT_ID?.length,
+      viteClientSecretLength: import.meta.env.VITE_GOOGLE_CLIENT_SECRET?.length,
+      viteApiKeyLength: import.meta.env.VITE_GOOGLE_API_KEY?.length
+    });
+
     const storedSettings = encryptedStorage.getOAuthSettings();
-    console.log('🔍 Debug: Stored OAuth settings:', {
+    console.log('🔍 DEBUG: Stored OAuth settings:', {
       hasStoredSettings: !!storedSettings,
       hasClientId: !!storedSettings?.clientId,
       hasClientSecret: !!storedSettings?.clientSecret,
@@ -54,14 +66,23 @@ export const userService = {
       driveUrl: storedSettings.driveUrl || DEFAULT_GOOGLE_OAUTH_SETTINGS.driveUrl
     };
 
-    console.log('🔍 Debug: Final OAuth settings:', {
+    console.log('🔍 DEBUG: Final OAuth settings:', {
       hasSettings: !!settings,
       hasClientId: !!settings.clientId,
       hasClientSecret: !!settings.clientSecret,
       hasDriveUrl: !!settings.driveUrl,
       clientIdLength: settings.clientId?.length,
-      clientSecretLength: settings.clientSecret?.length
+      clientSecretLength: settings.clientSecret?.length,
+      clientIdSource: storedSettings.clientId ? 'stored' : 'env',
+      clientSecretSource: storedSettings.clientSecret ? 'stored' : 'env'
     });
+
+    // Additional validation
+    if (!settings.clientId || !settings.clientSecret) {
+      console.error('❌ DEBUG: Missing OAuth configuration!');
+      console.error('❌ DEBUG: Check your environment variables or stored settings');
+      console.error('❌ DEBUG: Required: VITE_GOOGLE_CLIENT_ID, VITE_GOOGLE_CLIENT_SECRET');
+    }
 
     return settings;
   },

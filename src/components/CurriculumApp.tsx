@@ -232,7 +232,35 @@ const AppContent = () => {
     const initializeApp = async () => {
       try {
         setIsInitializing(true);
-        console.log('Initializing app...');
+        console.log('🚀 DEBUG: Initializing app...');
+        
+        // Debug environment and configuration
+        console.log('🔧 DEBUG: Environment check:', {
+          mode: import.meta.env.MODE,
+          isDev: import.meta.env.DEV,
+          isProd: import.meta.env.PROD,
+          baseUrl: import.meta.env.BASE_URL,
+          hasViteGoogleClientId: !!import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          hasViteGoogleClientSecret: !!import.meta.env.VITE_GOOGLE_CLIENT_SECRET,
+          hasViteGoogleDriveUrl: !!import.meta.env.VITE_GOOGLE_DRIVE_URL,
+          viteClientIdLength: import.meta.env.VITE_GOOGLE_CLIENT_ID?.length || 0,
+          viteClientSecretLength: import.meta.env.VITE_GOOGLE_CLIENT_SECRET?.length || 0,
+          currentOrigin: window.location.origin,
+          currentPathname: location.pathname
+        });
+
+        // Configuration validation
+        const hasRequiredEnvVars = !!(import.meta.env.VITE_GOOGLE_CLIENT_ID && import.meta.env.VITE_GOOGLE_CLIENT_SECRET);
+        if (!hasRequiredEnvVars) {
+          console.error('❌ DEBUG: Missing required environment variables!');
+          console.error('❌ DEBUG: Please check your .env file contains:');
+          console.error('❌ DEBUG: - VITE_GOOGLE_CLIENT_ID');
+          console.error('❌ DEBUG: - VITE_GOOGLE_CLIENT_SECRET');
+          console.error('❌ DEBUG: - VITE_GOOGLE_DRIVE_URL (optional)');
+        } else {
+          console.log('✅ DEBUG: Environment variables are configured');
+        }
+
         // Migrate existing localStorage data to encrypted storage
         EncryptedStorage.migrateExistingData(SENSITIVE_KEYS);
 
@@ -267,36 +295,97 @@ const AppContent = () => {
 
         if (code) {
           // OAuth callback flow
-          console.log('Processing OAuth code...');
+          console.log('🔐 DEBUG: Processing OAuth callback');
+          console.log('🔐 DEBUG: Authorization code:', code.substring(0, 20) + '...');
+          console.log('🔐 DEBUG: Auth type:', authType);
+          console.log('🔐 DEBUG: Location state:', location.state);
           
           try {
+            console.log('🔐 DEBUG: Fetching Google OAuth settings for token exchange');
             const settings = await userService.getGoogleDriveSettings();
+            console.log('🔐 DEBUG: Settings for token exchange:', {
+              hasSettings: !!settings,
+              hasClientId: !!settings?.clientId,
+              hasClientSecret: !!settings?.clientSecret
+            });
+
+            const redirectUri = `${window.location.origin}/auth/callback`;
+            console.log('🔐 DEBUG: Token exchange redirect URI:', redirectUri);
+
+            const tokenRequestParams = {
+              code,
+              client_id: settings.clientId,
+              client_secret: settings.clientSecret,
+              redirect_uri: redirectUri,
+              grant_type: 'authorization_code',
+            };
+            console.log('🔐 DEBUG: Token exchange request params:', {
+              hasCode: !!tokenRequestParams.code,
+              hasClientId: !!tokenRequestParams.client_id,
+              hasClientSecret: !!tokenRequestParams.client_secret,
+              redirectUri: tokenRequestParams.redirect_uri,
+              grantType: tokenRequestParams.grant_type
+            });
+
+            console.log('🔐 DEBUG: Making token exchange request to Google');
             const response = await fetch('https://oauth2.googleapis.com/token', {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                code,
-                client_id: settings.clientId,
-                client_secret: settings.clientSecret,
-                redirect_uri: `${window.location.origin}/auth/callback`,
-                grant_type: 'authorization_code',
-              }),
+              body: new URLSearchParams(tokenRequestParams),
+            });
+
+            console.log('🔐 DEBUG: Token exchange response:', {
+              status: response.status,
+              statusText: response.statusText,
+              ok: response.ok
             });
 
             const data = await response.json();
-            if (data.error) throw new Error(data.error);
+            console.log('🔐 DEBUG: Token exchange response data:', {
+              hasAccessToken: !!data.access_token,
+              hasRefreshToken: !!data.refresh_token,
+              hasError: !!data.error,
+              error: data.error,
+              errorDescription: data.error_description,
+              tokenType: data.token_type,
+              expiresIn: data.expires_in
+            });
+
+            if (data.error) {
+              console.error('❌ DEBUG: OAuth token exchange error:', data.error);
+              console.error('❌ DEBUG: Error description:', data.error_description);
+              throw new Error(`OAuth error: ${data.error} - ${data.error_description}`);
+            }
 
             // Store tokens
+            console.log('🔐 DEBUG: Storing tokens in encrypted storage');
             encryptedStorage.setTokens(data.access_token, data.refresh_token);
 
             // Get user info
+            console.log('🔐 DEBUG: Fetching user info with access token');
             const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
               headers: { Authorization: `Bearer ${data.access_token}` }
             });
+
+            console.log('🔐 DEBUG: User info response:', {
+              status: userResponse.status,
+              statusText: userResponse.statusText,
+              ok: userResponse.ok
+            });
+
             const userData = await userResponse.json();
+            console.log('🔐 DEBUG: User data from Google:', {
+              hasId: !!userData.id,
+              hasEmail: !!userData.email,
+              hasName: !!userData.name,
+              hasPicture: !!userData.picture,
+              email: userData.email,
+              name: userData.name
+            });
 
             const adminEmails = ['anirach.m@fitm.kmutnb.ac.th', 'chutharat.m@op.kmutnb.ac.th'];
             const role = adminEmails.includes(userData.email.toLowerCase()) ? 'Admin' : 'Viewer';
+            console.log('🔐 DEBUG: User role assigned:', role);
 
             const userInfo = {
               id: userData.id || 'oauth-user',
@@ -308,22 +397,26 @@ const AppContent = () => {
               updatedAt: new Date()
             };
 
+            console.log('🔐 DEBUG: Setting user in context');
             setUser(userInfo);
 
             // เก็บข้อมูลการ login
+            console.log('🔐 DEBUG: Storing user data in encrypted storage');
             encryptedStorage.setUserData(userData.email, userInfo.name, userData.picture || '', role);
 
-            console.log('User authenticated successfully via OAuth flow');
+            console.log('✅ DEBUG: User authenticated successfully via OAuth flow');
 
             // Setup automatic token refresh for authenticated user
             setupTokenRefreshInterval();
 
             // ถ้าเป็นการ login ปกติ ให้ไปที่ Dashboard
             if (authType === 'login') {
+              console.log('🔐 DEBUG: Navigating to dashboard after successful OAuth');
               navigate('/dashboard');
             }
           } catch (error) {
-            console.error('OAuth flow error:', error);
+            console.error('❌ DEBUG: OAuth flow error:', error);
+            console.error('❌ DEBUG: Error stack:', error.stack);
             toast({
               title: "เกิดข้อผิดพลาด",
               description: "ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง",
@@ -389,22 +482,39 @@ const AppContent = () => {
 
   // Enhanced Google login with better token management
   const handleGoogleLogin = useCallback(async () => {
+    console.log('🚀 DEBUG: Starting Google login process');
+    
     try {
       // If we have a refresh token, try silent login first
       const { refreshToken } = encryptedStorage.getTokens();
+      console.log('🔍 DEBUG: Checking existing refresh token:', !!refreshToken);
       
       if (refreshToken) {
+        console.log('🔄 DEBUG: Attempting silent login with existing refresh token');
         const isValid = await checkAndSetUserFromToken();
+        console.log('✅ DEBUG: Silent login result:', isValid);
         if (isValid) {
+          console.log('🎯 DEBUG: Silent login successful, navigating to dashboard');
           navigate('/dashboard');
           return;
         }
+        console.log('❌ DEBUG: Silent login failed, proceeding with OAuth flow');
       }
 
       // Get OAuth settings
+      console.log('⚙️ DEBUG: Fetching Google OAuth settings from userService');
       const settings = await userService.getGoogleDriveSettings();
+      console.log('📋 DEBUG: OAuth settings received:', {
+        hasSettings: !!settings,
+        hasClientId: !!settings?.clientId,
+        hasClientSecret: !!settings?.clientSecret,
+        clientIdPrefix: settings?.clientId?.substring(0, 20) + '...',
+        clientSecretPrefix: settings?.clientSecret?.substring(0, 10) + '...'
+      });
 
       if (!settings || !settings.clientId || !settings.clientSecret) {
+        console.error('❌ DEBUG: Missing OAuth configuration');
+        console.error('❌ DEBUG: Settings object:', settings);
         toast({
           title: "กรุณาตั้งค่า Google OAuth",
           description: "กรุณาติดต่อผู้ดูแลระบบเพื่อตั้งค่า Google OAuth",
@@ -414,15 +524,28 @@ const AppContent = () => {
       }
 
       // Store return path and prepare OAuth
+      console.log('💾 DEBUG: Storing return path:', window.location.pathname);
       localStorage.setItem('returnPath', window.location.pathname);
       const redirectUri = `${window.location.origin}/auth/callback`;
+      console.log('🔗 DEBUG: Using redirect URI:', redirectUri);
       
       const scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify({ type: 'login' }))}`;
+      const state = JSON.stringify({ type: 'login' });
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent&state=${encodeURIComponent(state)}`;
       
+      console.log('🌐 DEBUG: OAuth URL parameters:', {
+        clientId: settings.clientId.substring(0, 20) + '...',
+        redirectUri: redirectUri,
+        scope: scope,
+        state: state
+      });
+      console.log('🌐 DEBUG: Full OAuth URL (first 200 chars):', authUrl.substring(0, 200) + '...');
+      
+      console.log('🚀 DEBUG: Redirecting to Google OAuth...');
       window.location.href = authUrl;
     } catch (error) {
-      console.error('Error during Google login:', error);
+      console.error('💥 DEBUG: Error during Google login:', error);
+      console.error('💥 DEBUG: Error stack:', error.stack);
       toast({
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง",

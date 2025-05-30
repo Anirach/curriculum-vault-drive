@@ -88,34 +88,78 @@ export const SENSITIVE_KEYS = [
 export const encryptedStorage = {
   // User data
   setUserData: (email: string, name: string, picture: string, role: string) => {
+    console.log('🔐 DEBUG: Storing user data in encrypted storage:', {
+      hasEmail: !!email,
+      hasName: !!name,
+      hasPicture: !!picture,
+      hasRole: !!role,
+      email: email,
+      name: name,
+      role: role
+    });
     EncryptedStorage.setItem('userEmail', email);
     EncryptedStorage.setItem('userName', name);
     EncryptedStorage.setItem('userPicture', picture);
     EncryptedStorage.setItem('userRole', role);
   },
 
-  getUserData: () => ({
-    email: EncryptedStorage.getItem('userEmail'),
-    name: EncryptedStorage.getItem('userName'),
-    picture: EncryptedStorage.getItem('userPicture'),
-    role: EncryptedStorage.getItem('userRole')
-  }),
+  getUserData: () => {
+    const userData = {
+      email: EncryptedStorage.getItem('userEmail'),
+      name: EncryptedStorage.getItem('userName'),
+      picture: EncryptedStorage.getItem('userPicture'),
+      role: EncryptedStorage.getItem('userRole')
+    };
+    console.log('🔍 DEBUG: Retrieved user data from encrypted storage:', {
+      hasEmail: !!userData.email,
+      hasName: !!userData.name,
+      hasPicture: !!userData.picture,
+      hasRole: !!userData.role,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role
+    });
+    return userData;
+  },
 
   // Tokens
   setTokens: (accessToken: string, refreshToken?: string) => {
+    console.log('🔐 DEBUG: Storing tokens in encrypted storage:', {
+      hasAccessToken: !!accessToken,
+      hasRefreshToken: !!refreshToken,
+      accessTokenLength: accessToken?.length,
+      refreshTokenLength: refreshToken?.length
+    });
     EncryptedStorage.setItem('accessToken', accessToken);
     if (refreshToken) {
       EncryptedStorage.setItem('refreshToken', refreshToken);
     }
   },
 
-  getTokens: () => ({
-    accessToken: EncryptedStorage.getItem('accessToken'),
-    refreshToken: EncryptedStorage.getItem('refreshToken')
-  }),
+  getTokens: () => {
+    const accessToken = EncryptedStorage.getItem('accessToken');
+    const refreshToken = EncryptedStorage.getItem('refreshToken');
+    console.log('🔍 DEBUG: Retrieved tokens from encrypted storage:', {
+      hasAccessToken: !!accessToken,
+      hasRefreshToken: !!refreshToken,
+      accessTokenLength: accessToken?.length,
+      refreshTokenLength: refreshToken?.length
+    });
+    return {
+      accessToken,
+      refreshToken
+    };
+  },
 
   // OAuth settings
   setOAuthSettings: (clientId: string, clientSecret: string, driveUrl: string) => {
+    console.log('🔐 DEBUG: Storing OAuth settings in encrypted storage:', {
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      hasDriveUrl: !!driveUrl,
+      clientIdLength: clientId?.length,
+      clientSecretLength: clientSecret?.length
+    });
     EncryptedStorage.setItem('clientId', clientId);
     EncryptedStorage.setItem('clientSecret', clientSecret);
     EncryptedStorage.setItem('driveUrl', driveUrl);
@@ -144,15 +188,23 @@ export const encryptedStorage = {
 
   // Clear all sensitive data, with option to keep refresh token for soft logout
   clearUserData: (options?: { keepRefreshToken?: boolean }) => {
+    console.log('🗑️ DEBUG: Clearing user data from encrypted storage:', {
+      keepRefreshToken: !!options?.keepRefreshToken,
+      keysToRemove: SENSITIVE_KEYS.filter(key => !(options?.keepRefreshToken && key === 'refreshToken'))
+    });
+    
     if (options?.keepRefreshToken) {
       const refreshToken = EncryptedStorage.getItem('refreshToken');
+      console.log('🔍 DEBUG: Preserving refresh token:', !!refreshToken);
       SENSITIVE_KEYS.forEach(key => {
         if (key !== 'refreshToken') EncryptedStorage.removeItem(key);
       });
       // Restore refresh token if it existed
       if (refreshToken) EncryptedStorage.setItem('refreshToken', refreshToken);
     } else {
+      console.log('🗑️ DEBUG: Clearing all sensitive data including refresh token');
       SENSITIVE_KEYS.forEach(key => EncryptedStorage.removeItem(key));
     }
+    console.log('✅ DEBUG: User data cleared successfully');
   }
 };
