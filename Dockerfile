@@ -31,7 +31,7 @@ RUN mkdir -p /usr/share/nginx/html && \
 USER nginx
 
 # Expose port 8080 (non-privileged port)
-EXPOSE 8080
+EXPOSE 8000
 
 # Start nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]
