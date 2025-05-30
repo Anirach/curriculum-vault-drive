@@ -390,40 +390,21 @@ const AppContent = () => {
   // Enhanced Google login with better token management
   const handleGoogleLogin = useCallback(async () => {
     try {
-      console.log('🔍 Debug: Starting Google login process...');
-      
       // If we have a refresh token, try silent login first
       const { refreshToken } = encryptedStorage.getTokens();
-      console.log('🔍 Debug: Refresh token exists:', !!refreshToken);
       
       if (refreshToken) {
-        console.log('🔍 Debug: Attempting silent login with refresh token...');
         const isValid = await checkAndSetUserFromToken();
-        console.log('🔍 Debug: Silent login result:', isValid);
         if (isValid) {
           navigate('/dashboard');
           return;
         }
-        console.log('🔍 Debug: Silent login failed, falling back to OAuth...');
       }
 
       // Get OAuth settings
-      console.log('🔍 Debug: Fetching Google OAuth settings...');
       const settings = await userService.getGoogleDriveSettings();
-      console.log('🔍 Debug: OAuth settings:', {
-        hasSettings: !!settings,
-        hasClientId: !!settings?.clientId,
-        hasClientSecret: !!settings?.clientSecret,
-        clientIdLength: settings?.clientId?.length,
-        clientSecretLength: settings?.clientSecret?.length
-      });
 
       if (!settings || !settings.clientId || !settings.clientSecret) {
-        console.error('❌ Debug: Missing OAuth settings:', {
-          settings: !!settings,
-          clientId: !!settings?.clientId,
-          clientSecret: !!settings?.clientSecret
-        });
         toast({
           title: "กรุณาตั้งค่า Google OAuth",
           description: "กรุณาติดต่อผู้ดูแลระบบเพื่อตั้งค่า Google OAuth",
@@ -435,15 +416,13 @@ const AppContent = () => {
       // Store return path and prepare OAuth
       localStorage.setItem('returnPath', window.location.pathname);
       const redirectUri = `${window.location.origin}/auth/callback`;
-      console.log('🔍 Debug: OAuth redirect URI:', redirectUri);
       
       const scope = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${settings.clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent&state=${encodeURIComponent(JSON.stringify({ type: 'login' }))}`;
       
-      console.log('🔍 Debug: Redirecting to Google OAuth...');
       window.location.href = authUrl;
     } catch (error) {
-      console.error('❌ Debug: Error during Google login:', error);
+      console.error('Error during Google login:', error);
       toast({
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง",
