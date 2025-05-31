@@ -9,12 +9,10 @@ RUN npm run build
 
 FROM nginx:alpine
 
-# Create nginx user and directories with proper permissions
-RUN addgroup -g 101 -S nginx && \
-    adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx && \
-    mkdir -p /var/cache/nginx /var/log/nginx /tmp && \
-    chown -R nginx:nginx /var/cache/nginx /var/log/nginx /tmp && \
-    chmod -R 755 /var/cache/nginx /var/log/nginx /tmp
+# Ensure required directories exist and are owned by nginx
+RUN mkdir -p /var/cache/nginx /var/log/nginx /tmp /usr/share/nginx/html && \
+    chown -R nginx:nginx /var/cache/nginx /var/log/nginx /tmp /usr/share/nginx/html && \
+    chmod -R 755 /var/cache/nginx /var/log/nginx /tmp /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
@@ -27,6 +25,8 @@ RUN mkdir -p /usr/share/nginx/html && \
     chown -R nginx:nginx /usr/share/nginx/html && \
     chmod -R 755 /usr/share/nginx/html
 
+RUN touch /var/run/nginx.pid && chown -R nginx:nginx /var/run/nginx.pid /run/nginx.pid
+
 # Switch to nginx user
 USER nginx
 
@@ -35,3 +35,4 @@ EXPOSE 8000
 
 # Start nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]
+
